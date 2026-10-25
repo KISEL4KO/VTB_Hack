@@ -344,7 +344,7 @@ def api_create_issue():
             raise ValueError("Цена и объёмы должны быть положительными, максимум — не меньше минимума.")
         res = db.create_cfa_issue(get_db(), issuer_id=session["user_id"], title=title,
                                   only_qual=bool(d.get("only_qual")), **params)
-        return jsonify({"status": "success", **res})
+        return jsonify({**res, "status": "success"})
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
@@ -377,7 +377,7 @@ def api_buy():
             raise ValueError("Укажите выпуск и количество ЦФА.")
         res = db.buy_cfa_on_showcase(get_db(), user_id=session["user_id"],
                                      issue_id=issue_id, qty=qty, sign_code=sign_code)
-        return jsonify({"status": "success", **res})
+        return jsonify({**res, "status": "success"})
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
@@ -389,7 +389,7 @@ def api_deposit():
     d = request.get_json(silent=True) or {}
     try:
         res = db.deposit_wallet(get_db(), user_id=session["user_id"], amount_rub=int(d.get("amount_rub")))
-        return jsonify({"status": "success", **res})
+        return jsonify({**res, "status": "success"})
     except (ValueError, TypeError) as e:
         return jsonify({"status": "error", "message": str(e) if isinstance(e, ValueError) else "Введите сумму."}), 400
 
@@ -400,7 +400,7 @@ def api_withdraw():
     d = request.get_json(silent=True) or {}
     try:
         res = db.withdraw_wallet(get_db(), user_id=session["user_id"], amount_rub=int(d.get("amount_rub")))
-        return jsonify({"status": "success", **res})
+        return jsonify({**res, "status": "success"})
     except (ValueError, TypeError) as e:
         return jsonify({"status": "error", "message": str(e) if isinstance(e, ValueError) else "Введите сумму."}), 400
 
