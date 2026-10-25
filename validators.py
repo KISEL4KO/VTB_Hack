@@ -284,4 +284,225 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
                 bank_bik=bik,
             )
 
-    return {"login": login, "profile": profile}, errors
+    # Полная анкета (все поля формы, кроме паролей) — её сверяет администратор
+    anketa = {k: v for k, v in f.items() if k not in ("password", "password2", "login")}
+    if role == "FL" and not errors:
+        anketa["fl_phone"] = profile["phone"]
+    return {"login": login, "profile": profile, "anketa": anketa}, errors
+
+
+# ==============================================================================
+# РЕШЕНИЕ О ВЫПУСКЕ ЦФА (форма эмитента по образцу РоВ ПАО Сбербанк)
+# ==============================================================================
+ROV_RISKS = {
+    "market": "Рыночный риск",
+    "liquidity": "Риск ликвидности",
+    "credit": "Кредитный риск эмитента",
+    "conflict": "Риск конфликта интересов",
+    "operational": "Операционный (технологический) риск",
+    "legal": "Правовой и налоговый риск",
+    "country": "Страновой риск",
+}
+ROV_COUPON_PERIODS = {"maturity": "единовременно в дату погашения", "quarterly": "ежеквартально",
+                      "monthly": "ежемесячно"}
+ROV_PAYMENT = {"wallet": "цифровыми рублями с кошелька участника на Платформе (смарт-контракт DvP)",
+               "noncash": "безналичными рублями на счёт, привязанный к кошельку участника"}
+ROV_INVESTORS = {"all": "все участники Платформы (для неквалифицированных физлиц — в пределах 600 000 ₽ в год)",
+                 "qualified": "только квалифицированные инвесторы и юридические лица"}
+ROV_DEFAULTS = {
+    "redemption_order": "Погашение осуществляется в дату погашения путём перечисления денежных средств в размере "
+                        "номинальной стоимости ЦФА и начисленного фиксированного дохода на кошелёк владельца ЦФА "
+                        "на Платформе. Ранее погашенные ЦФА повторно не выпускаются.",
+    "liability": "Ответственность Эмитента ограничивается суммой номинальной стоимости ЦФА и начисленного "
+                 "фиксированного дохода. За просрочку исполнения обязательств Эмитент несёт ответственность "
+                 "в соответствии с законодательством Российской Федерации.",
+    "disputes": "Споры разрешаются в суде по месту нахождения Эмитента после соблюдения претензионного порядка. "
+                "Срок ответа на претензию — 15 рабочих дней.",
+}
+
+
+def _int(f: dict, name: str, errors: dict, lo: int, hi: int, label: str, required: bool = True):
+    raw = str(f.get(name, "")).strip().replace(" ", "")
+    if not raw:
+        if required:
+            errors[name] = f"Укажите {label}."
+        return None
+    if not raw.isdigit():
+        errors[name] = "Только целое число."
+        return None
+    v = int(raw)
+    if v < lo or v > hi:
+        errors[name] = f"Допустимо от {lo:,} до {hi:,}.".replace(",", " ")
+        return None
+    return v
+
+
+def _date(f: dict, name: str, errors: dict, label: str):
+    raw = str(f.get(name, "")).strip()
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        errors[name] = f"Укажите {label}."
+        return None
+
+
+def validate_rov(f: dict) -> tuple[dict, dict]:
+    """Проверяет форму «Решения о выпуске». Возвращает (rov, errors)."""
+    errors: dict[str, str] = {}
+    today = date.today()
+
+    def text(name, label, lo=3, hi=2000, required=True, default=""):
+        v = " ".join(str(f.get(name, "") or default).split()) if name not in ROV_DEFAULTS else \
+            str(f.get(name, "") or default).strip()
+        if required and not v:
+            errors[name] = f"Заполните поле «{label}»."
+        elif v and (len(v) < lo or len(v) > hi):
+            errors[name] = f"Длина — от {lo} до {hi} символов."
+        return v
+
+    rov: dict = {}
+    # Раздел 1 — эмитент (то, чего нет в анкете)
+    rov["issuer_full_name"] = text("issuer_full_name", "Полное наименование эмитента", 5, 300)
+    ogrn_date = _date(f, "ogrn_date", errors, "дату присвоения ОГРН")
+    if ogrn_date and ogrn_date > today:
+        errors["ogrn_date"] = "Дата не может быть в будущем."
+    rov["ogrn_date"] = ogrn_date.isoformat() if ogrn_date else ""
+    rov["beneficiary"] = text("beneficiary", "Бенефициарный владелец", 3, 300)
+    rov["website"] = text("website", "Сайт", 4, 200, required=False)
+
+    # Раздел 3 — вид и объём прав
+    rov["title"] = text("title", "Наименование выпуска", 3, 80)
+    rov["coupon_rate"] = None
+    raw_rate = str(f.get("coupon_rate", "")).strip().replace(",", ".")
+    try:
+        rate = float(raw_rate)
+        if not 0 <= rate <= 100:
+            raise ValueError
+        rov["coupon_rate"] = round(rate, 2)
+    except ValueError:
+        errors["coupon_rate"] = "Ставка — число от 0 до 100, например 18.5."
+    rov["coupon_period"] = f.get("coupon_period", "")
+    if rov["coupon_period"] not in ROV_COUPON_PERIODS:
+        errors["coupon_period"] = "Выберите периодичность выплаты дохода."
+    maturity = _date(f, "maturity_date", errors, "дату погашения")
+    rov["redemption_order"] = text("redemption_order", "Порядок погашения", 20, 3000, default=ROV_DEFAULTS["redemption_order"])
+
+    # Раздел 4 — количество
+    rov["min_qty"] = _int(f, "min_qty", errors, 1, 10_000_000, "минимальное количество")
+    rov["max_qty"] = _int(f, "max_qty", errors, 1, 10_000_000, "максимальное количество")
+    if rov["min_qty"] and rov["max_qty"] and rov["max_qty"] < rov["min_qty"]:
+        errors["max_qty"] = "Максимум не может быть меньше минимума."
+    rov["min_order_qty"] = _int(f, "min_order_qty", errors, 1, 10_000_000, "минимум в одной заявке")
+    rov["max_order_qty"] = _int(f, "max_order_qty", errors, 1, 10_000_000, "максимум в одной заявке", required=False)
+    if rov["min_order_qty"] and rov["max_qty"] and rov["min_order_qty"] > rov["max_qty"]:
+        errors["min_order_qty"] = "Не может превышать максимальный объём выпуска."
+    if rov["max_order_qty"] and rov["min_order_qty"] and rov["max_order_qty"] < rov["min_order_qty"]:
+        errors["max_order_qty"] = "Не может быть меньше минимума в одной заявке."
+
+    # Раздел 5 — цена
+    rov["price_per_cfa"] = _int(f, "price_per_cfa", errors, 1, 1_000_000_000, "цену 1 ЦФА")
+
+    # Раздел 6 — период размещения
+    start = _date(f, "placement_start", errors, "дату начала размещения")
+    end = _date(f, "placement_end", errors, "дату окончания размещения")
+    if start and start < today:
+        errors["placement_start"] = "Начало размещения — не раньше сегодняшнего дня."
+    if start and end:
+        if end < start:
+            errors["placement_end"] = "Окончание не может быть раньше начала."
+        elif (end - start).days > 366:
+            errors["placement_end"] = "Период размещения — не больше года."
+    if maturity:
+        if end and maturity <= end:
+            errors["maturity_date"] = "Погашение — позже окончания периода размещения."
+        elif (maturity - today).days > 3653:
+            errors["maturity_date"] = "Срок обращения — не больше 10 лет."
+    rov["placement_start"] = start.isoformat() if start else ""
+    rov["placement_end"] = end.isoformat() if end else ""
+    rov["maturity_date"] = maturity.isoformat() if maturity else ""
+
+    # Разделы 8–12
+    rov["payment_method"] = f.get("payment_method", "")
+    if rov["payment_method"] not in ROV_PAYMENT:
+        errors["payment_method"] = "Выберите способ оплаты."
+    rov["liability"] = text("liability", "Ограничение ответственности", 20, 3000, default=ROV_DEFAULTS["liability"])
+    rov["investors"] = f.get("investors", "")
+    if rov["investors"] not in ROV_INVESTORS:
+        errors["investors"] = "Выберите круг инвесторов."
+    rov["buyback"] = f.get("buyback", "no")
+    if rov["buyback"] not in ("yes", "no"):
+        errors["buyback"] = "Выберите вариант."
+    rov["buyback_terms"] = text("buyback_terms", "Условия выкупа", 10, 2000, required=rov["buyback"] == "yes")
+    rov["collateral"] = f.get("collateral", "no")
+    if rov["collateral"] not in ("yes", "no"):
+        errors["collateral"] = "Выберите вариант."
+    rov["collateral_desc"] = text("collateral_desc", "Описание обеспечения", 10, 2000, required=rov["collateral"] == "yes")
+    rov["early_redemption"] = f.get("early_redemption", "no")
+    if rov["early_redemption"] not in ("yes", "no"):
+        errors["early_redemption"] = "Выберите вариант."
+    rov["disputes"] = text("disputes", "Порядок разрешения споров", 20, 3000, default=ROV_DEFAULTS["disputes"])
+
+    # Раздел 13 — риски
+    risks = f.get("risks") or []
+    if isinstance(risks, str):
+        risks = [risks]
+    rov["risks"] = [r for r in risks if r in ROV_RISKS]
+    if len(rov["risks"]) < 3:
+        errors["risks"] = "Отметьте не меньше трёх рисков, которые несёт инвестор."
+    rov["risks_extra"] = text("risks_extra", "Дополнительные риски", 10, 3000, required=False)
+
+    # Подпись
+    signer = " ".join(str(f.get("signer_name", "")).split())
+    if not signer:
+        errors["signer_name"] = "Укажите ФИО подписанта."
+    elif not FIO_RE.fullmatch(signer):
+        errors["signer_name"] = "Фамилия, имя и отчество — только буквы."
+    rov["signer_name"] = signer
+    rov["signer_position"] = text("signer_position", "Должность подписанта", 3, 150)
+    if str(f.get("confirm", "")).lower() not in ("true", "on", "1", "yes"):
+        errors["confirm"] = "Подтвердите достоверность сведений."
+
+    return rov, errors
+
+
+# ==============================================================================
+# Подписи полей анкеты — для карточки участника в админ-панели и PDF
+# ==============================================================================
+ANKETA_LABELS = {
+    "FL": [
+        ("Основные данные", [("fl_fio", "ФИО"), ("fl_birth_date", "Дата рождения"),
+                             ("fl_birth_place", "Место рождения"), ("fl_citizenship", "Гражданство")]),
+        ("Контакты", [("fl_phone", "Телефон"), ("fl_email", "E-mail")]),
+        ("Паспорт", [("fl_passport_num", "Серия и номер"), ("fl_passport_issued", "Код подразделения, кем выдан")]),
+        ("Адрес регистрации", [("fl_reg_city", "Город"), ("fl_reg_street", "Улица, дом, квартира")]),
+        ("Налоговые данные и статус", [("fl_inn", "ИНН"), ("fl_snils", "СНИЛС"),
+                                       ("fl_investor_status", "Статус инвестора")]),
+    ],
+    "UL": [
+        ("Организация", [("ul_company_name", "Сокращённое наименование"), ("ul_ogrn", "ОГРН / ОГРНИП"),
+                         ("ul_inn_kpp", "ИНН / КПП")]),
+        ("Юридический адрес", [("ul_addr_city", "Город"), ("ul_addr_street", "Улица, дом, офис")]),
+        ("Представитель", [("ul_rep_fio", "ФИО и контакты"), ("ul_rep_passport", "Паспорт"),
+                           ("ul_rep_inn", "ИНН"), ("ul_rep_role", "Полномочия")]),
+        ("Банковские реквизиты", [("ul_bank_account", "Расчётный счёт"), ("ul_bank_bik", "БИК")]),
+    ],
+}
+ANKETA_VALUES = {
+    "fl_investor_status": {"unqualified": "Неквалифицированный инвестор", "qualified": "Квалифицированный инвестор"},
+    "ul_rep_role": {"signer": "Право подписи сделок и выпуска ЦФА (УКЭП)", "viewer": "Только просмотр"},
+}
+
+
+def anketa_rows(role: str, anketa: dict) -> list[tuple[str, list[tuple[str, str]]]]:
+    """[(раздел, [(подпись, значение), …]), …] — анкета в человекочитаемом виде."""
+    out = []
+    for section, fields in ANKETA_LABELS.get(role, []):
+        rows = []
+        for key, label in fields:
+            value = anketa.get(key, "") or "—"
+            value = ANKETA_VALUES.get(key, {}).get(value, value)
+            if key == "fl_birth_date" and len(value) == 10 and value[4] == "-":
+                value = f"{value[8:]}.{value[5:7]}.{value[:4]}"
+            rows.append((label, value))
+        out.append((section, rows))
+    return out

@@ -1,0 +1,40 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Отчёты оператора</h2>
+    <p class="pane-desc">Документы по участникам, выпускам и состоянию распределённого реестра</p>
+  </div>
+</div>
+<div class="report-grid">
+  <a class="report-card" href="{{ url_for('admin.participants_pdf') }}" target="_blank">
+    <b>Реестр участников</b><span>Все участники, статусы допуска и балансы кошельков</span><em>PDF</em></a>
+  <a class="report-card" href="{{ url_for('admin.reconciliation_pdf') }}" target="_blank">
+    <b>Акт сверки с блокчейном</b><span>Построчное сравнение учёта в базе и состояния смарт-контракта</span><em>PDF</em></a>
+  <a class="report-card" href="{{ url_for('admin.audit_csv') }}">
+    <b>Журнал действий администраторов</b><span>Все решения по анкетам и выпускам</span><em>CSV</em></a>
+</div>
+
+<h3 class="block-title">Документы по выпускам</h3>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Выпуск</th><th>Эмитент</th><th>Статус</th><th>Документы</th></tr></thead>
+    <tbody>
+      {% for i in issues %}
+      <tr>
+        <td><b>{{ i.title }}</b><br><small>CFA-{{ '%06d' % i.id }}</small></td>
+        <td>{{ i.issuer_name }}</td>
+        <td><span class="badge badge--{{ issue_status[i.status][1] }}">{{ issue_status[i.status][0] }}</span></td>
+        <td class="doc-links">
+          <a href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank">Решение о выпуске</a>
+          {% if i.status in ('ISSUED', 'CANCELLED') %}<a href="{{ url_for('doc_results', issue_id=i.id) }}" target="_blank">Итоги выпуска</a>{% endif %}
+          {% if i.status == 'ISSUED' %}<a href="{{ url_for('doc_registry', issue_id=i.id) }}" target="_blank">Реестр владельцев</a>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty-cell">Выпусков пока нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

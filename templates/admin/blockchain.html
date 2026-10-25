@@ -1,0 +1,63 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Блокчейн и сверка</h2>
+    <p class="pane-desc">Лёгкая EVM-сеть платформы: смарт-контракт CFAPlatform, журнал транзакций и сверка с учётом в базе данных</p>
+  </div>
+  <a class="btn-secondary btn-link" href="{{ url_for('admin.reconciliation_pdf') }}" target="_blank">Акт сверки (PDF)</a>
+</div>
+
+{% if not status.enabled %}
+<div class="status-banner status-banner--amber"><b>Блокчейн выключен.</b> {{ status.reason }}</div>
+{% else %}
+<div class="stat-grid">
+  <div class="stat-tile"><span>Сеть</span><b class="stat-small">{{ 'Встроенная EVM' if status.mode == 'embedded' else 'Внешний узел (RPC)' }}</b></div>
+  <div class="stat-tile"><span>Высота блока</span><b>{{ status.block }}</b></div>
+  <div class="stat-tile"><span>Chain ID</span><b class="stat-small">{{ status.chain_id }}</b></div>
+  <div class="stat-tile"><span>Цифровых рублей в контракте</span><b>{{ status.total_rub|rub_short }}</b></div>
+</div>
+<div class="admin-card">
+  <div class="kv-row"><span>Смарт-контракт CFAPlatform</span><b class="mono">{{ status.contract }}</b></div>
+  <div class="kv-row"><span>Оператор (отправитель транзакций)</span><b class="mono">{{ status.operator }}</b></div>
+  <div class="kv-row"><span>Транзакций воспроизведено при запуске</span><b>{{ status.replayed }}</b></div>
+</div>
+
+<h3 class="block-title">Сверка учёта с контрактом
+  {% if rec_bad %}<span class="badge badge--red">расхождений: {{ rec_bad }}</span>{% else %}<span class="badge badge--green">всё совпадает</span>{% endif %}</h3>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Участник / выпуск</th><th>Показатель</th><th>База данных</th><th>Смарт-контракт</th><th>Итог</th></tr></thead>
+    <tbody>
+      {% for r in rec %}
+      <tr class="{{ '' if r.match else 'row-bad' }}">
+        <td>{{ r.who }}</td><td>{{ r.what }}</td><td>{{ r.db }}</td><td>{{ r.chain }}</td>
+        <td>{% if r.match %}<span class="badge badge--green">совпадает</span>{% else %}<span class="badge badge--red">расхождение</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-cell">Пока нечего сверять</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h3 class="block-title">Транзакции (последние 100)</h3>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Блок</th><th>Метод контракта</th><th>Аргументы</th><th>Газ</th><th>Хэш транзакции</th><th>Время</th></tr></thead>
+    <tbody>
+      {% for t in txs %}
+      <tr>
+        <td>#{{ t.block_number }}</td>
+        <td><b>{{ methods.get(t.method, t.method) }}</b><br><small class="mono">{{ t.method }}()</small></td>
+        <td class="mono small args-cell">{{ t.args_json }}</td>
+        <td>{{ t.gas_used|num }}</td>
+        <td><span class="code-tag code-tag--evm" title="{{ t.tx_hash }}">{{ t.tx_hash|short_hash(8) }}</span></td>
+        <td>{{ t.created_at|ddmm }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

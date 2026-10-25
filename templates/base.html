@@ -18,7 +18,14 @@
       <div class="top-header__right">
         {% if me %}
           <span class="top-header__user">{{ me.full_name }}</span>
+          {% if me.role == 'ADMIN' %}
+          <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('admin.dashboard') }}'">
+            Админ-панель{% if admin_counts and (admin_counts.users_pending + admin_counts.issues_review) %}
+            <span class="header-count">{{ admin_counts.users_pending + admin_counts.issues_review }}</span>{% endif %}
+          </button>
+          {% else %}
           <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('cabinet') }}'">Личный кабинет</button>
+          {% endif %}
           <button type="button" class="top-header__logout" onclick="location.href='{{ url_for('logout') }}'">Выйти</button>
         {% else %}
           <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('login_page') }}'">Войти на платформу</button>
@@ -31,7 +38,7 @@
 
   {% include "_modals.html" %}
   <div id="toast" class="toast hidden"></div>
-  <script>window.ME = {{ ({'role': me.role, 'qualified': me.is_qualified} if me else None)|tojson }};</script>
+  <script>window.ME = {{ ({'role': me.role, 'qualified': me.is_qualified, 'status': me.status} if me else None)|tojson }};</script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

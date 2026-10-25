@@ -1,0 +1,107 @@
+{% extends "admin/_layout.html" %}
+{% macro row(label, value) %}<div class="kv-row"><span>{{ label }}</span><b>{{ value if value not in (None, '') else '—' }}</b></div>{% endmacro %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <a class="back-link" href="{{ url_for('admin.issues') }}">← Решения о выпуске</a>
+    <h2 class="pane-title">{{ issue.title }}</h2>
+    <p class="pane-desc">CFA-{{ '%06d' % issue.id }} · {{ issuer.full_name }} · подано {{ issue.updated_at|ddmm }}</p>
+  </div>
+  <div class="head-actions">
+    <span class="badge badge--{{ issue_status[issue.status][1] }}">{{ issue_status[issue.status][0] }}</span>
+    <a class="btn-secondary btn-link" href="{{ url_for('doc_decision', issue_id=issue.id) }}" target="_blank">РоВ (PDF)</a>
+  </div>
+</div>
+
+<div class="admin-two-col admin-two-col--wide-left">
+  <div class="kv-sections">
+    <div class="kv-section">
+      <div class="kv-section__title">1. Эмитент</div>
+      {{ row('Полное наименование', rov.issuer_full_name) }}
+      {{ row('Сокращённое (из анкеты)', rov.issuer.name) }}
+      {{ row('ОГРН / КПП', rov.issuer.inn_kpp_ogrn) }}
+      {{ row('Дата присвоения ОГРН', rov.ogrn_date|ddmm) }}
+      {{ row('Бенефициарный владелец', rov.beneficiary) }}
+      {{ row('Сайт', rov.website) }}
+      <div class="kv-row"><span>Анкета эмитента</span><b><a href="{{ url_for('admin.user_detail', user_id=issuer.id) }}">{{ user_status[issuer.status][0] }} →</a></b></div>
+    </div>
+    <div class="kv-section">
+      <div class="kv-section__title">3–7. Параметры выпуска</div>
+      {{ row('Номинал = цена 1 ЦФА', issue.price_per_cfa|rub) }}
+      {{ row('Фиксированный доход', rov.coupon_rate ~ ' % годовых, ' ~ coupon_periods.get(rov.coupon_period, '')) }}
+      {{ row('Количество: минимум — максимум', (issue.min_qty|num) ~ ' — ' ~ (issue.max_qty|num) ~ ' шт.') }}
+      {{ row('В одной заявке', 'от ' ~ (issue.min_order_qty|num) ~ (' до ' ~ (issue.max_order_qty|num) if issue.max_order_qty else ', без верхней границы')) }}
+      {{ row('Объём выпуска', (issue.price_per_cfa * issue.max_qty)|rub) }}
+      {{ row('Период размещения', (issue.placement_start|ddmm) ~ ' — ' ~ (issue.placement_end|ddmm)) }}
+      {{ row('Дата погашения', issue.maturity_date|ddmm) }}
+      {{ row('Порядок погашения', rov.redemption_order) }}
+    </div>
+    <div class="kv-section">
+      <div class="kv-section__title">8–12. Условия</div>
+      {{ row('Оплата', payments.get(rov.payment_method)) }}
+      {{ row('Круг лиц', investors_all.get(rov.investors)) }}
+      {{ row('Выкуп эмитентом', 'предусмотрен: ' ~ rov.buyback_terms if rov.buyback == 'yes' else 'не предусмотрен') }}
+      {{ row('Обеспечение', 'предусмотрено: ' ~ rov.collateral_desc if rov.collateral == 'yes' else 'не предусмотрено') }}
+      {{ row('Досрочное погашение', 'допускается' if rov.early_redemption == 'yes' else 'не допускается') }}
+      {{ row('Ответственность', rov.liability) }}
+      {{ row('Споры', rov.disputes) }}
+    </div>
+    <div class="kv-section">
+      <div class="kv-section__title">13. Риски и подпись</div>
+      {{ row('Раскрытые риски', risk_names|join(', ')) }}
+      {{ row('Дополнительно', rov.risks_extra) }}
+      {{ row('Подписант', rov.signer_position ~ ' — ' ~ rov.signer_name) }}
+      <div class="kv-row"><span>Подпись УКЭП</span><b class="mono">{{ issue.ukep_signature }}</b></div>
+      <div class="kv-row"><span>SHA-256 документа</span><b class="mono">{{ issue.doc_hash|short_hash(12) }}</b></div>
+      {% if issue.evm_tx_hash %}<div class="kv-row"><span>Регистрация в контракте</span><b class="mono">{{ issue.evm_tx_hash|short_hash(10) }}</b></div>{% endif %}
+    </div>
+  </div>
+
+  <div>
+    <h3 class="block-title">Подсказки модератору</h3>
+    <ul class="check-list">
+      {% for c in checks %}
+      <li class="check-item check-item--{{ c.status }}">
+        <span class="check-item__mark">{{ {'ok': '✓', 'warn': '!', 'fail': '✕'}[c.status] }}</span>
+        <span><b>{{ c.title }}</b><small>{{ c.detail }}</small></span>
+      </li>
+      {% endfor %}
+    </ul>
+
+    {% if issue.status == 'REVIEW' %}
+    <div class="decision-card" data-decision-url="/api/admin/issues/{{ issue.id }}">
+      <h3>Решение</h3>
+      <label class="decision-label" for="decision-reason">Комментарий / что исправить</label>
+      <textarea id="decision-reason" name="reason" rows="3" placeholder="Например: укажите обеспечение в разделе 12"></textarea>
+      <div id="decision-error" class="form-error hidden"></div>
+      <div class="decision-buttons">
+        <button type="button" class="btn-primary" data-decide="approve"
+                data-confirm="Опубликовать выпуск на витрине и зарегистрировать его в смарт-контракте?">Одобрить и опубликовать</button>
+        <button type="button" class="btn-danger" data-decide="reject">Вернуть на доработку</button>
+      </div>
+    </div>
+    {% elif issue.status == 'REJECTED' %}
+    <div class="status-banner status-banner--red"><b>Возвращён на доработку:</b> {{ issue.reject_reason }}</div>
+    {% else %}
+    <div class="admin-card">
+      <div class="admin-card__head"><h3>Сбор заявок</h3></div>
+      {{ row('Собрано', (issue.collected_qty|num) ~ ' из ' ~ (issue.max_qty|num) ~ ' шт.') }}
+      {% for o in orders %}
+      <div class="kv-row"><span>№{{ o.id }} · {{ o.full_name }}</span><b>{{ o.qty|num }} шт. · {{ order_status[o.status][0] }}</b></div>
+      {% endfor %}
+      <div class="doc-links" style="margin-top: 10px;">
+        {% if issue.status in ('ISSUED', 'CANCELLED') %}<a href="{{ url_for('doc_results', issue_id=issue.id) }}" target="_blank">Итоги выпуска (PDF)</a>{% endif %}
+        {% if issue.status == 'ISSUED' %}<a href="{{ url_for('doc_registry', issue_id=issue.id) }}" target="_blank">Реестр владельцев (PDF)</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if history %}
+    <h3 class="block-title">История решений</h3>
+    {% for h in history %}
+    <div class="kv-row"><span>{{ h.created_at|ddmm }} · {{ h.admin_name }}</span><b>{{ action_names.get(h.action, h.action) }}{% if h.comment %}: {{ h.comment }}{% endif %}</b></div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -29,7 +29,7 @@
         <h2 class="section-title">Доступные выпуски на рынке ЦФА</h2>
         <p class="section-subtitle">Выберите выпуск для просмотра параметров или перейдите к подаче заявки на покупку</p>
       </div>
-      <button type="button" class="btn-primary" onclick="location.href='{{ url_for('cabinet_tab', tab='issuer') }}'">+ Создать выпуск ЦФА</button>
+      {% if not me or me.role == 'UL' %}<button type="button" class="btn-primary" onclick="location.href='{{ url_for('issuer_new') }}'">+ Создать выпуск ЦФА</button>{% endif %}
     </div>
 
     <div id="market-issues-grid" class="cards-grid-3">
@@ -51,26 +51,29 @@
           <div class="progress" title="Собрано {{ i.collected_qty }} из {{ i.max_qty }} шт.">
             <div class="progress__bar" style="width: {{ (100 * i.collected_qty / i.max_qty)|round|int }}%"></div>
           </div>
-          <p class="progress__text">Собрано {{ i.collected_qty }} из {{ i.max_qty }} шт. (минимум {{ i.min_qty }}) · погашение {{ i.maturity_date }}</p>
+          <p class="progress__text">Собрано {{ i.collected_qty|num }} из {{ i.max_qty|num }} шт. (минимум {{ i.min_qty|num }}) · погашение {{ i.maturity_date|ddmm }}</p>
+          {% if i.status == 'SUBSCRIPTION' %}<p class="progress__text">Приём заявок: {{ i.placement_start|ddmm }} — {{ i.placement_end|ddmm }}</p>{% endif %}
         </div>
         <div class="cfa-card__actions">
-          {% if i.status == 'SUBSCRIPTION' %}
+          {% if i.status == 'SUBSCRIPTION' and i.placement_start <= today_iso <= i.placement_end %}
           <button type="button" class="btn-primary" style="flex: 1;"
                   data-buy="{{ i.id }}" data-title="{{ i.title }}" data-price="{{ i.price_per_cfa }}"
-                  data-left="{{ i.max_qty - i.collected_qty }}">Купить ЦФА</button>
+                  data-left="{{ i.max_qty - i.collected_qty }}" data-min="{{ i.min_order_qty }}"
+                  data-max="{{ i.max_order_qty or '' }}">Купить ЦФА</button>
+          {% elif i.status == 'SUBSCRIPTION' and today_iso < i.placement_start %}
+          <button type="button" class="btn-primary" style="flex: 1;" disabled>Приём с {{ i.placement_start|ddmm }}</button>
           {% else %}
           <button type="button" class="btn-primary" style="flex: 1;" disabled>Сбор закрыт</button>
           {% endif %}
-          <button type="button" class="btn-secondary"
-                  data-doc="Решение о выпуске: {{ i.title }}"
-                  data-doc-text="Эмитент: {{ i.issuer_name }}. Цена 1 ЦФА: {{ i.price_per_cfa }} ₽. Объём: от {{ i.min_qty }} до {{ i.max_qty }} шт. Ставка: {{ i.coupon_rate }}% годовых. Дата погашения: {{ i.maturity_date }}. Подпись УКЭП: {{ i.ukep_signature }}.">РОВ</button>
+          <a class="btn-secondary btn-link" href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank"
+             title="Решение о выпуске (PDF), SHA-256 {{ i.doc_hash }}">РоВ</a>
         </div>
       </article>
       {% else %}
       <div class="empty-slot-box">
         <div class="empty-slot-box__icon">ЦФА</div>
         <h3 class="empty-slot-box__title">Пока нет выпусков</h3>
-        <p class="empty-slot-box__desc">Войдите как юридическое лицо и создайте первый выпуск во вкладке «Мои выпуски».</p>
+        <p class="empty-slot-box__desc">Эмитент подаёт Решение о выпуске, администратор проверяет его — после одобрения выпуск появится здесь.</p>
       </div>
       {% endfor %}
     </div>

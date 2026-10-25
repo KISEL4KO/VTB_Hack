@@ -3,24 +3,36 @@
 <div class="pane-header-row">
   <div>
     <h2 class="pane-title">Данные клиента</h2>
-    <p class="pane-desc">Просмотр и актуализация профиля участника, реквизитов, статуса квалификации и годового лимита</p>
+    <p class="pane-desc">Профиль участника, статус допуска, квалификация и анкета, переданная на проверку</p>
   </div>
+  <span class="badge badge--{{ user_status[me.status][1] }}">{{ user_status[me.status][0] }}</span>
 </div>
 <div id="profile-container" class="light-form-card">
   <div class="light-form-grid">
     <div class="light-field"><label>Наименование / ФИО участника</label><input type="text" value="{{ me.full_name }}" readonly></div>
+    <div class="light-field"><label>Логин для входа</label><input type="text" value="{{ me.login }}" readonly></div>
     <div class="light-field"><label>Тип участника и квалификация</label>
       <input type="text" readonly value="{% if me.role == 'UL' %}Юридическое лицо{% elif me.is_qualified %}Физлицо, квалифицированный инвестор{% else %}Физлицо, неквалифицированный (лимит 600 000 ₽ в год){% endif %}"></div>
-    <div class="light-field"><label>Логин для входа</label><input type="text" value="{{ me.login or 'не задан' }}" readonly></div>
     <div class="light-field"><label>ИНН участника</label><input type="text" value="{{ me.inn }}" readonly></div>
-    <div class="light-field"><label>EVM-кошелёк в сети Solidity</label><input type="text" value="{{ me.evm_address }}" readonly></div>
-    <div class="light-field"><label>{{ 'ОГРН / КПП' if me.role == 'UL' else 'СНИЛС' }}</label><input type="text" value="{{ me.snils_or_ogrn }}" readonly></div>
-    <div class="light-field"><label>Телефон / e-mail</label><input type="text" value="{{ me.phone or '—' }} / {{ me.email or '—' }}" readonly></div>
-    <div class="light-field light-field--full"><label>Адрес</label><input type="text" value="{{ me.address or '—' }}" readonly></div>
+    <div class="light-field light-field--full"><label>Адрес в EVM-сети платформы</label><input type="text" value="{{ me.evm_address }}" readonly></div>
+    <div class="light-field light-field--full"><label>Транзакция включения в белый список</label>
+      <input type="text" value="{{ me.evm_tx_hash or ('после одобрения анкеты' if me.status == 'PENDING' else '—') }}" readonly></div>
     {% if me.role == 'FL' and not me.is_qualified %}
     <div class="light-field light-field--full"><label>Использовано годового лимита</label>
       <input type="text" readonly value="{{ me.yearly_spent_rub|rub }} из 600 000 ₽ (остаток {{ (600000 - me.yearly_spent_rub)|rub }})"></div>
     {% endif %}
   </div>
+</div>
+
+<h3 class="block-title">Анкета, переданная на проверку</h3>
+<div class="kv-sections">
+  {% for title, rows in anketa %}
+  <div class="kv-section">
+    <div class="kv-section__title">{{ title }}</div>
+    {% for label, value in rows %}
+    <div class="kv-row"><span>{{ label }}</span><b>{{ value }}</b></div>
+    {% endfor %}
+  </div>
+  {% endfor %}
 </div>
 {% endblock %}

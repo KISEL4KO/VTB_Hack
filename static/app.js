@@ -57,14 +57,19 @@ document.addEventListener('click', function (e) {
   var b = e.target.closest('[data-buy]');
   if (!b) return;
   if (!window.ME) { location.href = '/login?next=' + encodeURIComponent(location.pathname); return; }
+  if (window.ME.role === 'ADMIN') { toast('Администратор не совершает операций с активами'); return; }
+  if (window.ME.status !== 'APPROVED') { toast('Покупка станет доступна после проверки анкеты администратором'); return; }
   var f = $('#form-buy-cfa');
   f.issue_id.value = b.dataset.buy;
   f.qty.value = '';
   f.sign_code.value = '';
-  f.qty.max = b.dataset.left;
+  var maxOrder = b.dataset.max ? Math.min(+b.dataset.max, +b.dataset.left) : +b.dataset.left;
+  f.qty.max = maxOrder;
+  f.qty.min = b.dataset.min || 1;
   buyState.price = +b.dataset.price;
   $('#buy-issue-title').textContent = b.dataset.title;
-  $('#buy-total').textContent = 'Цена 1 ЦФА: ' + buyState.price.toLocaleString('ru-RU') + ' ₽. Доступно: ' + b.dataset.left + ' шт.';
+  $('#buy-total').textContent = 'Цена 1 ЦФА: ' + buyState.price.toLocaleString('ru-RU') + ' ₽. В одной заявке: от ' +
+    (b.dataset.min || 1) + ' до ' + maxOrder.toLocaleString('ru-RU') + ' шт.';
   showError('buy-error', '');
   openModal('modal-buy');
 });
@@ -101,19 +106,91 @@ if (walletForm) {
   });
 }
 
-// ---------- Кабинет эмитента ----------
-var issuerForm = $('#form-issuer');
-if (issuerForm) {
-  issuerForm.addEventListener('submit', async function (e) {
+// ---------- Решение о выпуске (форма эмитента) ----------
+var rovForm = $('#form-rov');
+if (rovForm) {
+  function rovVolume() {
+    var price = +rovForm.price_per_cfa.value || 0, max = +rovForm.max_qty.value || 0, min = +rovForm.min_qty.value || 0;
+    $('#rov-volume').textContent = price && max ? (price * max).toLocaleString('ru-RU') + ' ₽ (' + max.toLocaleString('ru-RU') + ' шт.)' : '—';
+    if (min) $('#rov-success-note').textContent = 'Выпуск состоится, если будет заявлено не меньше ' + min.toLocaleString('ru-RU') +
+      ' ЦФА. Иначе смарт-контракт вернёт замороженные средства инвесторам.';
+  }
+  ['price_per_cfa', 'max_qty', 'min_qty'].forEach(function (n) { rovForm[n].addEventListener('input', rovVolume); });
+  rovVolume();
+  // Исправленное поле перестаёт быть красным, как только его меняют
+  rovForm.addEventListener('input', function (e) {
+    var el = e.target;
+    if (el.classList.contains('is-invalid')) setFieldState(el, '', false);
+    var group = el.closest('[data-group]');
+    if (group) group.classList.remove('is-invalid-group');
+  });
+
+  rovForm.addEventListener('submit', async function (e) {
     e.preventDefault();
-    var d = Object.fromEntries(new FormData(issuerForm).entries());
-    d.only_qual = d.only_qual === 'true';
+    showError('rov-error', '');
+    var fd = new FormData(rovForm);
+    var d = Object.fromEntries(fd.entries());
+    d.risks = fd.getAll('risks');
+    d.confirm = rovForm.confirm.checked ? 'true' : '';
+    var id = rovForm.dataset.issueId;
+    var btn = rovForm.querySelector('[type="submit"]');
+    btn.disabled = true;
     try {
-      await api('/api/issues', d);
-      reloadSoon('Выпуск подписан УКЭП и опубликован на витрине');
-    } catch (err) { if (err.message !== 'auth') showError('issuer-error', err.message); }
+      await api(id ? '/api/issues/' + id : '/api/issues', d);
+      toast('Решение о выпуске подписано и отправлено на проверку');
+      setTimeout(function () { location.href = '/cabinet/issuer'; }, 900);
+    } catch (err) {
+      if (err.message === 'auth') return;
+      var errors = err.errors || {};
+      if (errors.risks) { $('[data-group="risks"]').classList.add('is-invalid-group'); }
+      if (errors.confirm) { toast(errors.confirm); }
+      // Ошибки полей, которых нет в обычной разметке .form-field, тоже подсвечиваем
+      Object.keys(errors).forEach(function (name) {
+        var input = rovForm.querySelector('[name="' + name + '"]');
+        if (input && !input.closest('.form-field')) markLight(input, errors[name]);
+      });
+      showError('rov-error', err.message);
+      var first = rovForm.querySelector('.is-invalid, .is-invalid-group');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } finally { btn.disabled = false; }
   });
 }
+
+// Подсветка для светлых форм (.light-field) — та же идея, что setFieldState
+function markLight(input, message) {
+  var box = input.closest('.light-field') || input.parentElement;
+  input.classList.add('is-invalid');
+  var el = box.querySelector('.field-error');
+  if (!el) { el = document.createElement('small'); el.className = 'field-error'; box.appendChild(el); }
+  el.textContent = message;
+  input.addEventListener('input', function clear() {
+    input.classList.remove('is-invalid'); if (el.parentNode) el.remove(); input.removeEventListener('input', clear);
+  });
+}
+
+// ---------- Админ-панель: одобрить / отклонить / заблокировать ----------
+document.addEventListener('click', async function (e) {
+  var b = e.target.closest('[data-decide]');
+  if (!b) return;
+  var card = b.closest('[data-decision-url]');
+  var reasonEl = card.querySelector('[name="reason"]');
+  var action = b.dataset.decide;
+  showError('decision-error', '');
+  if ((action === 'reject' || action === 'block') && !reasonEl.value.trim()) {
+    showError('decision-error', action === 'block' ? 'Укажите причину блокировки.' : 'Укажите причину — её увидит заявитель.');
+    reasonEl.focus();
+    return;
+  }
+  if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+  card.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+  try {
+    var r = await api(card.dataset.decisionUrl + '/' + action, { reason: reasonEl.value });
+    reloadSoon(r.evm_tx_hash ? 'Готово. Транзакция в блокчейне: ' + r.evm_tx_hash.slice(0, 14) + '…' : 'Решение сохранено');
+  } catch (err) {
+    if (err.message !== 'auth') showError('decision-error', err.message);
+    card.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
+  }
+});
 
 document.addEventListener('click', async function (e) {
   var b = e.target.closest('[data-finalize]');
@@ -327,9 +404,9 @@ function attachLiveValidation(form, rules) {
   });
 }
 
-function goAfterAuth() {
+function goAfterAuth(fallback) {
   var next = window.AUTH_NEXT;   // разрешаем только внутренние адреса вида /cabinet/...
-  location.href = (next && next.charAt(0) === '/' && next.charAt(1) !== '/') ? next : '/cabinet';
+  location.href = (next && next.charAt(0) === '/' && next.charAt(1) !== '/') ? next : (fallback || '/cabinet');
 }
 
 // ---------- Поля «только цифры» (паспорт, ИНН представителя) ----------
@@ -507,11 +584,11 @@ if (loginForm) {
     var btn = loginForm.querySelector('[type="submit"]');
     btn.disabled = true;
     try {
-      await api('/api/login', {
+      var res = await api('/api/login', {
         login: loginForm.querySelector('[name="login"]').value,
         password: loginForm.querySelector('[name="password"]').value
       });
-      goAfterAuth();
+      goAfterAuth(res.redirect);
     } catch (err) {
       if (err.message === 'auth') return;
       showFieldErrors(loginForm, err.errors);
@@ -538,7 +615,7 @@ if (registerForm) {
         role: $('#fs-fl').disabled ? 'ul' : 'fl',
         fields: Object.fromEntries(new FormData(registerForm).entries())   // disabled-поля сюда не попадают
       });
-      goAfterAuth();
+      location.href = '/cabinet';   // анкета ушла на проверку — кабинет покажет статус
     } catch (err) {
       if (err.message === 'auth') return;
       showFieldErrors(registerForm, err.errors);

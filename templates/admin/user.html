@@ -1,0 +1,76 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <a class="back-link" href="{{ url_for('admin.users') }}">← Допуск участников</a>
+    <h2 class="pane-title">{{ u.full_name }}</h2>
+    <p class="pane-desc">{{ 'Физическое лицо' if u.role == 'FL' else 'Юридическое лицо' }} · логин {{ u.login }} · анкета подана {{ u.created_at|ddmm }}</p>
+  </div>
+  <div class="head-actions">
+    <span class="badge badge--{{ user_status[u.status][1] }}">{{ user_status[u.status][0] }}</span>
+    <a class="btn-secondary btn-link" href="{{ url_for('admin.user_pdf', user_id=u.id) }}" target="_blank">Анкета (PDF)</a>
+  </div>
+</div>
+
+<div class="admin-two-col admin-two-col--wide-left">
+  <div>
+    <h3 class="block-title">Анкета</h3>
+    <div class="kv-sections">
+      {% for title, rows in sections %}
+      <div class="kv-section">
+        <div class="kv-section__title">{{ title }}</div>
+        {% for label, value in rows %}<div class="kv-row"><span>{{ label }}</span><b>{{ value }}</b></div>{% endfor %}
+      </div>
+      {% endfor %}
+      <div class="kv-section">
+        <div class="kv-section__title">Платформа</div>
+        <div class="kv-row"><span>Адрес в EVM-сети</span><b class="mono">{{ u.evm_address }}</b></div>
+        <div class="kv-row"><span>Кошелёк</span><b>{{ wallet.balance_rub|rub }} свободно · {{ wallet.locked_rub|rub }} в холде</b></div>
+        {% if u.evm_tx_hash %}<div class="kv-row"><span>Транзакция белого списка</span><b class="mono">{{ u.evm_tx_hash|short_hash(10) }}</b></div>{% endif %}
+        {% if reviewer %}<div class="kv-row"><span>Проверил</span><b>{{ reviewer.full_name }}, {{ u.reviewed_at|ddmm }}</b></div>{% endif %}
+        {% if u.reject_reason %}<div class="kv-row"><span>Причина</span><b>{{ u.reject_reason }}</b></div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h3 class="block-title">Автоматическая сверка</h3>
+    <ul class="check-list">
+      {% for c in checks %}
+      <li class="check-item check-item--{{ c.status }}">
+        <span class="check-item__mark">{{ {'ok': '✓', 'warn': '!', 'fail': '✕'}[c.status] }}</span>
+        <span><b>{{ c.title }}</b><small>{{ c.detail }}</small></span>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="muted small">Сверка подсказывает, на что смотреть. Решение принимает администратор.</p>
+
+    <div class="decision-card" data-decision-url="/api/admin/users/{{ u.id }}">
+      <h3>Решение</h3>
+      <label class="decision-label" for="decision-reason">Комментарий / причина отказа</label>
+      <textarea id="decision-reason" name="reason" rows="3" placeholder="Например: не совпадает ИНН с данными ФНС"></textarea>
+      <div id="decision-error" class="form-error hidden"></div>
+      <div class="decision-buttons">
+        {% if u.status in ('PENDING', 'REJECTED', 'BLOCKED') %}
+        <button type="button" class="btn-primary" data-decide="approve"
+                data-confirm="Допустить участника к операциям и добавить его адрес в белый список смарт-контракта?">Одобрить допуск</button>
+        {% endif %}
+        {% if u.status == 'PENDING' %}
+        <button type="button" class="btn-danger" data-decide="reject">Отказать</button>
+        {% endif %}
+        {% if u.status == 'APPROVED' %}
+        <button type="button" class="btn-danger" data-decide="block"
+                data-confirm="Заблокировать участника? Адрес будет исключён из белого списка смарт-контракта.">Заблокировать</button>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if history %}
+    <h3 class="block-title">История решений</h3>
+    {% for h in history %}
+    <div class="kv-row"><span>{{ h.created_at|ddmm }} · {{ h.admin_name }}</span><b>{{ action_names.get(h.action, h.action) }}{% if h.comment %}: {{ h.comment }}{% endif %}</b></div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

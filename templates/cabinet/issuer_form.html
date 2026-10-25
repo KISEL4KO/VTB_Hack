@@ -1,0 +1,167 @@
+{% extends "cabinet/_layout.html" %}
+{% macro field(name, label, type='text', hint='', full=False, attrs='') %}
+  <div class="light-field {{ 'light-field--full' if full }}">
+    <label for="rov-{{ name }}">{{ label }}</label>
+    <input id="rov-{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ rov.get(name, '') }}" {{ attrs|safe }}>
+    {% if hint %}<small class="field-hint">{{ hint }}</small>{% endif %}
+  </div>
+{% endmacro %}
+{% macro area(name, label, rows=3) %}
+  <div class="light-field light-field--full">
+    <label for="rov-{{ name }}">{{ label }}</label>
+    <textarea id="rov-{{ name }}" name="{{ name }}" rows="{{ rows }}">{{ rov.get(name, '') }}</textarea>
+  </div>
+{% endmacro %}
+{% macro select(name, label, options, full=False) %}
+  <div class="light-field {{ 'light-field--full' if full }}">
+    <label for="rov-{{ name }}">{{ label }}</label>
+    <select id="rov-{{ name }}" name="{{ name }}">
+      {% for value, text in options.items() %}
+      <option value="{{ value }}" {{ 'selected' if rov.get(name) == value }}>{{ text }}</option>
+      {% endfor %}
+    </select>
+  </div>
+{% endmacro %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">{{ 'Исправление' if issue else 'Новое' }} решение о выпуске ЦФА</h2>
+    <p class="pane-desc">Документ по образцу «Решения о выпуске» оператора ИС: 13 разделов. После отправки его проверит администратор.</p>
+  </div>
+  <a class="btn-secondary btn-link" href="{{ url_for('cabinet_tab', tab='issuer') }}">← К выпускам</a>
+</div>
+
+{% if issue and issue.status == 'REJECTED' %}
+<div class="status-banner status-banner--red"><b>Замечания администратора:</b> {{ issue.reject_reason }}</div>
+{% endif %}
+
+<form id="form-rov" class="rov-form" data-issue-id="{{ issue.id if issue else '' }}" novalidate>
+  <section class="rov-section">
+    <h3><span>1</span> Сведения об эмитенте</h3>
+    <div class="rov-prefill">
+      <div><span>Сокращённое наименование</span><b>{{ me.full_name }}</b></div>
+      <div><span>ОГРН / КПП</span><b>{{ me.snils_or_ogrn }}</b></div>
+      <div><span>ИНН</span><b>{{ me.inn }}</b></div>
+      <div><span>Адрес</span><b>{{ me.address }}</b></div>
+      <small>Берутся из проверенной анкеты эмитента</small>
+    </div>
+    <div class="light-form-grid">
+      {{ field('issuer_full_name', 'Полное наименование', full=True, attrs='placeholder="Общество с ограниченной ответственностью «…»"') }}
+      {{ field('ogrn_date', 'Дата присвоения ОГРН', 'date') }}
+      {{ field('website', 'Официальный сайт (необязательно)', attrs='placeholder="example.ru"') }}
+      {{ field('beneficiary', 'Бенефициарный владелец', full=True, attrs='placeholder="ФИО и доля владения"') }}
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>2</span> Оператор информационной системы</h3>
+    <p class="rov-note">Заполняется автоматически: информационная система «Платформа ЦФА», распределённый реестр — смарт-контракт CFAPlatform в EVM-сети оператора.</p>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>3</span> Вид и объём прав</h3>
+    <p class="rov-note">ЦФА удостоверяют денежные требования к эмитенту: право на номинальную стоимость и фиксированный доход.</p>
+    <div class="light-form-grid">
+      {{ field('title', 'Наименование выпуска', full=True, attrs='placeholder="ЦФА Компания 01" maxlength="80"') }}
+      {{ field('coupon_rate', 'Фиксированный доход, % годовых', attrs='inputmode="decimal" placeholder="18.5"') }}
+      {{ select('coupon_period', 'Выплата дохода', coupon_periods) }}
+      {{ field('maturity_date', 'Дата погашения', 'date') }}
+      {{ area('redemption_order', 'Порядок погашения', 3) }}
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>4</span> Количество ЦФА</h3>
+    <div class="light-form-grid">
+      {{ field('min_qty', 'Минимальное количество выпуска, шт.', hint='Порог: если заявок меньше — выпуск не состоится', attrs='inputmode="numeric"') }}
+      {{ field('max_qty', 'Максимальное количество выпуска, шт.', attrs='inputmode="numeric"') }}
+      {{ field('min_order_qty', 'Минимум в одной заявке, шт.', attrs='inputmode="numeric"') }}
+      {{ field('max_order_qty', 'Максимум в одной заявке, шт.', hint='Пусто — без ограничения', attrs='inputmode="numeric"') }}
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>5</span> Цена приобретения</h3>
+    <div class="light-form-grid">
+      {{ field('price_per_cfa', 'Цена 1 ЦФА = номинальная стоимость, ₽', attrs='inputmode="numeric"') }}
+      <div class="light-field"><label>Объём выпуска</label><div class="static-value" id="rov-volume">—</div></div>
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>6</span> Период размещения</h3>
+    <div class="light-form-grid">
+      {{ field('placement_start', 'Начало приёма заявок', 'date', attrs='min="' ~ today_iso ~ '"') }}
+      {{ field('placement_end', 'Окончание приёма заявок', 'date', attrs='min="' ~ today_iso ~ '"') }}
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>7</span> Признание выпуска состоявшимся</h3>
+    <p class="rov-note" id="rov-success-note">Выпуск состоится, если заявлено не меньше минимального количества ЦФА (раздел 4). Иначе смарт-контракт вернёт средства инвесторам.</p>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>8</span> Способ оплаты</h3>
+    <div class="light-form-grid">{{ select('payment_method', 'Оплата', payments, full=True) }}</div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>9</span> Ограничение ответственности эмитента</h3>
+    <div class="light-form-grid">{{ area('liability', 'Текст раздела', 3) }}</div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>10</span> Круг лиц</h3>
+    <div class="light-form-grid">{{ select('investors', 'Кому предлагаются ЦФА', investors_all, full=True) }}</div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>11</span> Выкуп ЦФА эмитентом</h3>
+    <div class="light-form-grid">
+      {{ select('buyback', 'Выкуп до погашения', {'no': 'Не предусмотрен', 'yes': 'Предусмотрен'}) }}
+      {{ area('buyback_terms', 'Условия выкупа (если предусмотрен)', 2) }}
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>12</span> Иные условия</h3>
+    <div class="light-form-grid">
+      {{ select('collateral', 'Обеспечение', {'no': 'Не предусмотрено', 'yes': 'Предусмотрено'}) }}
+      {{ select('early_redemption', 'Досрочное погашение', {'no': 'Не допускается', 'yes': 'Допускается'}) }}
+      {{ area('collateral_desc', 'Описание обеспечения (если предусмотрено)', 2) }}
+      {{ area('disputes', 'Порядок разрешения споров', 2) }}
+    </div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>13</span> Риски</h3>
+    <div class="light-field light-field--full">
+      <label>Риски, которые несёт инвестор (не меньше трёх)</label>
+      <div class="check-grid" data-group="risks">
+        {% for key, text in risks_all.items() %}
+        <label class="check"><input type="checkbox" name="risks" value="{{ key }}" {{ 'checked' if key in rov.get('risks', []) }}> {{ text }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="light-form-grid">{{ area('risks_extra', 'Дополнительные риски (необязательно)', 2) }}</div>
+  </section>
+
+  <section class="rov-section">
+    <h3><span>✍</span> Подпись</h3>
+    <div class="light-form-grid">
+      {{ field('signer_name', 'ФИО подписанта', attrs='placeholder="Иванов Иван Иванович"') }}
+      {{ field('signer_position', 'Должность') }}
+      <div class="light-field light-field--full">
+        <label class="check"><input type="checkbox" name="confirm" value="true"> Подтверждаю достоверность сведений и подписываю Решение о выпуске УКЭП</label>
+      </div>
+    </div>
+  </section>
+
+  <div id="rov-error" class="form-error hidden"></div>
+  <div class="rov-actions">
+    <a class="btn-secondary btn-link" href="{{ url_for('cabinet_tab', tab='issuer') }}">Отмена</a>
+    <button type="submit" class="btn-primary">Подписать и отправить на проверку</button>
+  </div>
+</form>
+{% endblock %}

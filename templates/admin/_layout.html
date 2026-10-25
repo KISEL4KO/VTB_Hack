@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Админ-панель — Платформа ЦФА{% endblock %}
+{% macro nav(key, endpoint, label, count=0) %}
+  <a href="{{ url_for(endpoint) }}" class="sidebar-link {{ 'sidebar-link--active' if section == key }}">
+    <span class="sidebar-dot"></span><span>{{ label }}</span>
+    {% if count %}<span class="nav-count">{{ count }}</span>{% endif %}
+  </a>
+{% endmacro %}
+{% block content %}
+<main id="screen-admin">
+  <div class="cabinet-layout">
+    <aside class="cabinet-sidebar">
+      <div class="sidebar-section-label">Администратор</div>
+      <nav class="sidebar-nav">
+        {{ nav('dashboard', 'admin.dashboard', 'Сводка') }}
+        {{ nav('users', 'admin.users', 'Допуск участников', admin_counts.users_pending) }}
+        {{ nav('issues', 'admin.issues', 'Решения о выпуске', admin_counts.issues_review) }}
+      </nav>
+      <div class="sidebar-section-label">Контроль</div>
+      <nav class="sidebar-nav">
+        {{ nav('blockchain', 'admin.blockchain_page', 'Блокчейн и сверка') }}
+        {{ nav('audit', 'admin.audit', 'Журнал действий') }}
+        {{ nav('reports', 'admin.reports_page', 'Отчёты') }}
+      </nav>
+    </aside>
+    <div class="cabinet-content">
+      <section class="cabinet-pane">
+        {% block pane %}{% endblock %}
+      </section>
+    </div>
+  </div>
+</main>
+{% endblock %}

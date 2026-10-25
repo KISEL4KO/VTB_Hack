@@ -8,7 +8,7 @@
 </div>
 <div class="ui-table-wrap">
   <table class="ui-table">
-    <thead><tr><th>Дата и время</th><th>Тип операции</th><th>Сумма (₽)</th><th>Описание</th><th>TxHash (EVM Блокчейн)</th><th>Статус</th></tr></thead>
+    <thead><tr><th>Дата и время</th><th>Тип операции</th><th>Сумма (₽)</th><th>Описание</th><th>Хэш в журнале</th><th>Транзакция EVM</th></tr></thead>
     <tbody id="history-tbody">
       {% for r in ledger %}
       <tr>
@@ -16,8 +16,9 @@
         <td>{{ op_types.get(r.op_type, r.op_type) }}</td>
         <td>{{ r.amount_rub|rub }}</td>
         <td>{{ r.description }}</td>
-        <td><span class="code-tag" title="{{ r.tx_hash }}">{{ r.tx_hash[:18] }}…</span></td>
-        <td><span class="badge badge--green">Подтверждено</span></td>
+        <td><span class="code-tag" title="{{ r.tx_hash }}">{{ r.tx_hash|short_hash(6) }}</span></td>
+        <td>{% if r.evm_tx_hash %}<span class="code-tag code-tag--evm" title="{{ r.evm_tx_hash }}">{{ r.evm_tx_hash|short_hash(6) }}</span>
+            {% else %}<span class="muted">—</span>{% endif %}</td>
       </tr>
       {% else %}
       <tr><td colspan="6" class="empty-cell">Операций пока нет</td></tr>

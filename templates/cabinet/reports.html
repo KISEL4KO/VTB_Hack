@@ -2,22 +2,43 @@
 {% block pane %}
 <div class="pane-header-row">
   <div>
-    <h2 class="pane-title">Отчёты</h2>
-    <p class="pane-desc">Формирование и скачивание документов, выписок из реестра владельцев ЦФА и финансовой отчётности</p>
+    <h2 class="pane-title">Отчёты и документы</h2>
+    <p class="pane-desc">Выписки, подтверждения заявок, документы эмитента в PDF и выгрузки в CSV для Excel</p>
   </div>
 </div>
 <div id="reports-container" class="ui-table-wrap">
   <table class="ui-table">
-    <thead><tr><th>Наименование отчета</th><th>Период</th><th>Дата формирования</th><th>Действие</th></tr></thead>
+    <thead><tr><th>Документ</th><th>Период / объект</th><th>Дата формирования</th><th>Скачать</th></tr></thead>
     <tbody>
       <tr>
-        <td>Выписка по операциям кошелька и реестру ОИС</td><td>За всё время</td><td>{{ today }}</td>
-        <td><a class="btn-secondary btn-link" href="{{ url_for('report_csv', kind='ledger') }}">Скачать CSV</a></td>
+        <td><b>Выписка по счёту участника</b><br><small>Деньги, ЦФА, операции; остатки сверены со смарт-контрактом</small></td>
+        <td>На {{ today }}</td><td>{{ today }}</td>
+        <td class="doc-links"><a href="{{ url_for('doc_statement') }}" target="_blank">PDF</a></td>
       </tr>
       <tr>
-        <td>Выписка из реестра владельцев ЦФА (портфель)</td><td>На {{ today }}</td><td>{{ today }}</td>
-        <td><a class="btn-secondary btn-link" href="{{ url_for('report_csv', kind='portfolio') }}">Скачать CSV</a></td>
+        <td>Операции кошелька и журнал платформы</td><td>За всё время</td><td>{{ today }}</td>
+        <td class="doc-links"><a href="{{ url_for('report_csv', kind='ledger') }}">CSV</a></td>
       </tr>
+      <tr>
+        <td>Портфель ЦФА</td><td>На {{ today }}</td><td>{{ today }}</td>
+        <td class="doc-links"><a href="{{ url_for('report_csv', kind='portfolio') }}">CSV</a></td>
+      </tr>
+      {% for o in orders %}
+      <tr>
+        <td>Подтверждение заявки №{{ o.id }}</td><td>{{ o.title }}</td><td>{{ o.created_at|ddmm }}</td>
+        <td class="doc-links"><a href="{{ url_for('doc_order', order_id=o.id) }}" target="_blank">PDF</a></td>
+      </tr>
+      {% endfor %}
+      {% for i in my_issues %}
+      <tr>
+        <td><b>Документы эмитента</b> · {{ i.title }}</td><td>CFA-{{ '%06d' % i.id }}</td><td>{{ today }}</td>
+        <td class="doc-links">
+          <a href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank">Решение о выпуске</a>
+          {% if i.status in ('ISSUED', 'CANCELLED') %}<a href="{{ url_for('doc_results', issue_id=i.id) }}" target="_blank">Итоги выпуска</a>{% endif %}
+          {% if i.status == 'ISSUED' %}<a href="{{ url_for('doc_registry', issue_id=i.id) }}" target="_blank">Реестр владельцев</a>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
     </tbody>
   </table>
 </div>

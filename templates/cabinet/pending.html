@@ -1,0 +1,29 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pending-box">
+  {% if me.status == 'PENDING' %}
+  <div class="pending-box__icon pending-box__icon--amber">⏳</div>
+  <h2 class="pane-title">Анкета на проверке</h2>
+  <p class="pane-desc">
+    Администратор платформы сверяет ваши данные: реквизиты, документы и статус инвестора.
+    После одобрения вы сможете пополнять кошелёк, покупать и выпускать ЦФА,
+    а ваш адрес будет добавлен в белый список смарт-контракта.
+  </p>
+  <ol class="pending-steps">
+    <li class="done">Регистрация и анкета</li>
+    <li class="current">Проверка администратором</li>
+    <li>Допуск к операциям и включение в белый список блокчейна</li>
+  </ol>
+  {% elif me.status == 'REJECTED' %}
+  <div class="pending-box__icon pending-box__icon--red">✕</div>
+  <h2 class="pane-title">В допуске отказано</h2>
+  <p class="pane-desc">Причина: <b>{{ me.reject_reason }}</b></p>
+  <p class="pane-desc">Свяжитесь с оператором платформы, чтобы уточнить данные.</p>
+  {% else %}
+  <div class="pending-box__icon pending-box__icon--red">⛔</div>
+  <h2 class="pane-title">Доступ заблокирован</h2>
+  <p class="pane-desc">Причина: <b>{{ me.reject_reason }}</b></p>
+  {% endif %}
+  <a class="btn-secondary btn-link" href="{{ url_for('cabinet_tab', tab='profile') }}">Посмотреть свою анкету</a>
+</div>
+{% endblock %}

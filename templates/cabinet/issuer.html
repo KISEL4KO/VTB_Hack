@@ -2,46 +2,35 @@
 {% block pane %}
 <div class="pane-header-row">
   <div>
-    <h2 class="pane-title">Мои выпуски (Конструктор ЦФА по релизу 100735)</h2>
-    <p class="pane-desc">Подготовка Решения о выпуске фиксированных ЦФА, подписание УКЭП и публикация на витрине</p>
+    <h2 class="pane-title">Мои выпуски</h2>
+    <p class="pane-desc">Решения о выпуске ЦФА: подготовка, проверка администратором, сбор заявок и расчёт DvP</p>
   </div>
+  {% if me.role == 'UL' %}
+  <a class="btn-primary btn-link" href="{{ url_for('issuer_new') }}">+ Новое решение о выпуске</a>
+  {% endif %}
 </div>
 {% if me.role != 'UL' %}
-<div class="light-form-card">Выпускать ЦФА могут только юридические лица и ИП (259-ФЗ). Войдите на платформу как юрлицо.</div>
+<div class="light-form-card">Выпускать ЦФА могут только юридические лица и ИП (259-ФЗ).</div>
 {% else %}
-<form id="form-issuer" class="light-form-card">
-  <h3 style="margin: 0 0 14px 0; font-size: 16px;">Параметры нового выпуска ЦФА</h3>
-  <div class="light-form-grid">
-    <div class="light-field"><label>Краткое наименование ЦФА</label><input type="text" name="title" placeholder="Например: ЦФА-Альфа-01" required></div>
-    <div class="light-field"><label>Номинальная цена 1 ЦФА (₽)</label><input type="number" name="price_per_cfa" min="1" placeholder="1000" required></div>
-    <div class="light-field"><label>Минимальный объем выпуска (шт.) — порог успеха</label><input type="number" name="min_qty" min="1" placeholder="100" required></div>
-    <div class="light-field"><label>Максимальный объем выпуска (шт.)</label><input type="number" name="max_qty" min="1" placeholder="1000" required></div>
-    <div class="light-field"><label>Фиксированная ставка дохода (% годовых)</label><input type="number" step="0.1" name="coupon_rate" placeholder="19.5" required></div>
-    <div class="light-field"><label>Дата погашения</label><input type="date" name="maturity_date" required></div>
-    <div class="light-field light-field--full"><label>Категория инвесторов (по 259-ФЗ)</label>
-      <select name="only_qual">
-        <option value="false">Всем инвесторам (ФЛ с лимитом 600 тыс. ₽ и ЮЛ)</option>
-        <option value="true">Только квалифицированным инвесторам и ЮЛ</option>
-      </select>
-    </div>
-    <div id="issuer-error" class="form-error hidden light-field--full"></div>
-    <div class="light-field light-field--full" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 6px;">
-      <button type="submit" class="btn-primary">Подписать Решение о выпуске (УКЭП) и опубликовать</button>
-    </div>
-  </div>
-</form>
+<ol class="flow-steps">
+  <li><b>1. Решение о выпуске</b><span>заполняете форму из 13 разделов и подписываете УКЭП</span></li>
+  <li><b>2. Проверка</b><span>администратор сверяет документ и одобряет или возвращает на доработку</span></li>
+  <li><b>3. Сбор заявок</b><span>выпуск на витрине и в смарт-контракте, деньги инвесторов в холде</span></li>
+  <li><b>4. DvP</b><span>закрываете сбор — ЦФА инвесторам, деньги вам одной транзакцией</span></li>
+</ol>
 
 <div class="ui-table-wrap">
   <table class="ui-table">
-    <thead><tr><th>ID</th><th>Наименование</th><th>Номинал</th><th>Собрано / План (шт.)</th><th>Статус выпуска</th><th>Управление сбором (DvP)</th></tr></thead>
+    <thead><tr><th>ID</th><th>Выпуск</th><th>Номинал</th><th>Собрано / план</th><th>Статус</th><th>Действия</th><th>Документы</th></tr></thead>
     <tbody id="issuer-releases-tbody">
       {% for i in my_issues %}
       {% set st = issue_status[i.status] %}
       <tr>
-        <td>{{ i.evm_token_id or i.id }}</td>
-        <td>{{ i.title }}</td>
+        <td>CFA-{{ '%06d' % i.id }}</td>
+        <td>{{ i.title }}<br><small>размещение {{ i.placement_start|ddmm }} — {{ i.placement_end|ddmm }}</small>
+          {% if i.status == 'REJECTED' %}<div class="reject-note">Замечания: {{ i.reject_reason }}</div>{% endif %}</td>
         <td>{{ i.price_per_cfa|rub }}</td>
-        <td>{{ i.collected_qty }} / {{ i.max_qty }} <small>(мин. {{ i.min_qty }})</small></td>
+        <td>{{ i.collected_qty|num }} / {{ i.max_qty|num }} <small>(мин. {{ i.min_qty|num }})</small></td>
         <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span></td>
         <td>
           {% if i.status == 'SUBSCRIPTION' %}
@@ -49,11 +38,22 @@
                   data-confirm="{{ 'Закрыть сбор и выполнить расчёт DvP?' if i.collected_qty >= i.min_qty else 'Минимум не набран — выпуск будет отменён, деньги вернутся инвесторам. Продолжить?' }}">
             Закрыть сбор
           </button>
+          {% elif i.status in ('REVIEW', 'REJECTED') %}
+          <a class="btn-secondary btn-link" href="{{ url_for('issuer_edit', issue_id=i.id) }}">{{ 'Исправить' if i.status == 'REJECTED' else 'Изменить' }}</a>
           {% else %}—{% endif %}
+        </td>
+        <td class="doc-links">
+          <a href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank">РоВ (PDF)</a>
+          {% if i.status in ('ISSUED', 'CANCELLED') %}
+          <a href="{{ url_for('doc_results', issue_id=i.id) }}" target="_blank">Итоги выпуска</a>
+          {% endif %}
+          {% if i.status == 'ISSUED' %}
+          <a href="{{ url_for('doc_registry', issue_id=i.id) }}" target="_blank">Реестр владельцев</a>
+          {% endif %}
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="empty-cell">У вас пока нет выпусков</td></tr>
+      <tr><td colspan="7" class="empty-cell">У вас пока нет выпусков. Нажмите «Новое решение о выпуске».</td></tr>
       {% endfor %}
     </tbody>
   </table>

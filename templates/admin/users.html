@@ -1,0 +1,35 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Допуск участников</h2>
+    <p class="pane-desc">Анкеты физлиц и юрлиц: сверка данных, одобрение или отказ. Одобренные попадают в белый список смарт-контракта.</p>
+  </div>
+  <a class="btn-secondary btn-link" href="{{ url_for('admin.participants_pdf') }}" target="_blank">Реестр участников (PDF)</a>
+</div>
+<div class="filter-chips">
+  {% for key, label in [('PENDING', 'На проверке'), ('APPROVED', 'Допущены'), ('REJECTED', 'Отказано'), ('BLOCKED', 'Заблокированы'), ('ALL', 'Все')] %}
+  <a href="{{ url_for('admin.users', status=key) }}" class="chip {{ 'chip--active' if status == key }}">{{ label }}{% if key in counts %} <span>{{ counts[key] }}</span>{% endif %}</a>
+  {% endfor %}
+</div>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Участник</th><th>Тип</th><th>ИНН</th><th>Подана</th><th>Автосверка</th><th>Статус</th><th></th></tr></thead>
+    <tbody>
+      {% for it in items %}{% set u = it.u %}
+      <tr>
+        <td><b>{{ u.full_name }}</b><br><small>{{ u.login }}</small></td>
+        <td>{{ 'ФЛ' if u.role == 'FL' else 'ЮЛ' }}{% if u.role == 'FL' and u.is_qualified %}<br><small>квал.</small>{% endif %}</td>
+        <td>{{ u.inn }}</td>
+        <td>{{ u.created_at|ddmm }}</td>
+        <td><span class="check-pill check-pill--{{ it.check }}">{{ {'ok': 'Всё сходится', 'warn': 'Есть замечания', 'fail': 'Препятствие'}[it.check] }}</span></td>
+        <td><span class="badge badge--{{ user_status[u.status][1] }}">{{ user_status[u.status][0] }}</span></td>
+        <td><a class="btn-secondary btn-link" href="{{ url_for('admin.user_detail', user_id=u.id) }}">{{ 'Проверить' if u.status == 'PENDING' else 'Открыть' }}</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-cell">Нет участников в этом статусе</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

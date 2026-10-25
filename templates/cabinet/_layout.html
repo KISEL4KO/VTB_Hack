@@ -14,7 +14,7 @@
         {{ nav('wallets', 'Мои кошельки') }}
         {{ nav('products', 'Продукты') }}
         {{ nav('history', 'История операций') }}
-        {{ nav('reports', 'Отчёты') }}
+        {{ nav('reports', 'Отчёты и документы') }}
         {{ nav('profile', 'Данные клиента') }}
       </nav>
       <div class="sidebar-section-label">Кабинет ЦФА</div>
@@ -24,13 +24,23 @@
         {{ nav('operations', 'Операции') }}
         {{ nav('coupons', 'Выплаты по купонам') }}
       </nav>
+      {% if me.role == 'UL' %}
       <div class="sidebar-sub-label">Эмитент</div>
       <nav class="sidebar-nav">
         {{ nav('issuer', 'Мои выпуски') }}
       </nav>
+      {% endif %}
     </aside>
 
     <div class="cabinet-content">
+      {% if me.status != 'APPROVED' %}
+      <div class="status-banner status-banner--{{ user_status[me.status][1] }}">
+        <b>Статус допуска: {{ user_status[me.status][0] }}.</b>
+        {% if me.status == 'PENDING' %}Анкета проверяется администратором платформы. Операции станут доступны после одобрения.
+        {% elif me.status == 'REJECTED' %}Причина: {{ me.reject_reason }}
+        {% elif me.status == 'BLOCKED' %}Причина: {{ me.reject_reason }}{% endif %}
+      </div>
+      {% endif %}
       <section class="cabinet-pane">
         {% block pane %}{% endblock %}
       </section>

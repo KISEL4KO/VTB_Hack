@@ -1,0 +1,61 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Сводка</h2>
+    <p class="pane-desc">Что ждёт решения администратора и как сейчас работает платформа</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <a class="stat-tile stat-tile--accent" href="{{ url_for('admin.users') }}">
+    <span>Анкет ждут проверки</span><b>{{ admin_counts.users_pending }}</b></a>
+  <a class="stat-tile stat-tile--accent" href="{{ url_for('admin.issues') }}">
+    <span>Решений о выпуске на проверке</span><b>{{ admin_counts.issues_review }}</b></a>
+  <div class="stat-tile"><span>Участников допущено</span><b>{{ stats.approved }} <small>из {{ stats.participants }}</small></b></div>
+  <div class="stat-tile"><span>Выпусков в сборе заявок</span><b>{{ stats.issues_live }}</b></div>
+  <div class="stat-tile"><span>Размещено ЦФА (DvP)</span><b>{{ stats.issued_volume|rub_short }}</b></div>
+  <div class="stat-tile"><span>Средств в холде</span><b>{{ stats.hold_volume|rub_short }}</b></div>
+</div>
+
+<div class="admin-two-col">
+  <div class="admin-card">
+    <div class="admin-card__head"><h3>Новые анкеты</h3><a href="{{ url_for('admin.users') }}">Все →</a></div>
+    {% for u in pending_users %}
+    <a class="admin-list-row" href="{{ url_for('admin.user_detail', user_id=u.id) }}">
+      <span><b>{{ u.full_name }}</b><small>{{ 'Физлицо' if u.role == 'FL' else 'Юрлицо' }} · {{ u.created_at|ddmm }}</small></span>
+      <span class="badge badge--amber">Проверить</span>
+    </a>
+    {% else %}<p class="muted">Новых анкет нет</p>{% endfor %}
+  </div>
+  <div class="admin-card">
+    <div class="admin-card__head"><h3>Решения о выпуске</h3><a href="{{ url_for('admin.issues') }}">Все →</a></div>
+    {% for i in review_issues %}
+    <a class="admin-list-row" href="{{ url_for('admin.issue_detail', issue_id=i.id) }}">
+      <span><b>{{ i.title }}</b><small>{{ i.issuer_name }} · {{ (i.price_per_cfa * i.max_qty)|rub_short }}</small></span>
+      <span class="badge badge--amber">Проверить</span>
+    </a>
+    {% else %}<p class="muted">Документов на проверке нет</p>{% endfor %}
+  </div>
+</div>
+
+<div class="admin-two-col">
+  <div class="admin-card">
+    <div class="admin-card__head"><h3>Блокчейн</h3><a href="{{ url_for('admin.blockchain_page') }}">Обозреватель →</a></div>
+    {% if chain_status.enabled %}
+    <div class="kv-row"><span>Сеть</span><b>{{ 'Встроенная EVM (py-evm)' if chain_status.mode == 'embedded' else 'Внешний узел' }}</b></div>
+    <div class="kv-row"><span>Высота блока</span><b>{{ chain_status.block }}</b></div>
+    <div class="kv-row"><span>Смарт-контракт</span><b class="mono">{{ chain_status.contract|short_hash(8) }}</b></div>
+    <div class="kv-row"><span>Цифровых рублей в контракте</span><b>{{ chain_status.total_rub|rub }}</b></div>
+    {% else %}
+    <p class="muted">Блокчейн выключен: {{ chain_status.reason }}</p>
+    {% endif %}
+  </div>
+  <div class="admin-card">
+    <div class="admin-card__head"><h3>Последние действия</h3><a href="{{ url_for('admin.audit') }}">Журнал →</a></div>
+    {% for a in actions %}
+    <div class="kv-row"><span>{{ a.created_at|ddmm }}</span><b>{{ action_names.get(a.action, a.action) }} · #{{ a.target_id }}</b></div>
+    {% else %}<p class="muted">Действий пока не было</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

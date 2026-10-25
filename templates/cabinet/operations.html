@@ -8,7 +8,7 @@
 </div>
 <div class="ui-table-wrap">
   <table class="ui-table">
-    <thead><tr><th>№ заявки / Дата</th><th>Выпуск ЦФА</th><th>Кол-во (шт.)</th><th>Сумма сделки (₽)</th><th>Подпись (ПЭП / УКЭП)</th><th>Статус</th></tr></thead>
+    <thead><tr><th>№ заявки / Дата</th><th>Выпуск ЦФА</th><th>Кол-во (шт.)</th><th>Сумма сделки (₽)</th><th>Подпись (ПЭП / УКЭП)</th><th>Статус</th><th>Документ</th></tr></thead>
     <tbody id="operations-tbody">
       {% for o in orders %}
       {% set st = order_status[o.status] %}
@@ -16,10 +16,12 @@
         <td>№{{ o.id }}<br><small>{{ o.created_at }}</small></td>
         <td>{{ o.title }}</td><td>{{ o.qty }}</td><td>{{ o.total_rub|rub }}</td>
         <td>{{ 'ПЭП (СМС)' if o.sign_type == 'PEP_SMS' else 'УКЭП' }}<br><small>{{ o.signature_hash[:22] }}…</small></td>
-        <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span></td>
+        <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span>
+          {% if o.evm_tx_hash %}<br><small class="code-tag" title="{{ o.evm_tx_hash }}">EVM {{ o.evm_tx_hash|short_hash(6) }}</small>{% endif %}</td>
+        <td class="doc-links"><a href="{{ url_for('doc_order', order_id=o.id) }}" target="_blank">Подтверждение (PDF)</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="empty-cell">Заявок пока нет. Купить ЦФА можно на витрине «Рынок ЦФА».</td></tr>
+      <tr><td colspan="7" class="empty-cell">Заявок пока нет. Купить ЦФА можно на витрине «Рынок ЦФА».</td></tr>
       {% endfor %}
     </tbody>
   </table>
