@@ -17,11 +17,15 @@ import validators
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cfa-dev-secret-change-me")
 
-# Автоматическая инициализация базы данных при старте приложения
-if not db.DB_PATH.exists():
-    _conn = db.get_connection()
-    db.init_db(_conn)
-    _conn.close()
+# Автоматическая инициализация базы данных при старте приложения.
+# init_db выполняет CREATE TABLE IF NOT EXISTS, поэтому её безопасно вызывать каждый раз:
+# существующие таблицы и данные не трогаются, а пустой файл cfa.db (например, оставшийся,
+# если базу удалили при запущенном сервере) получит все таблицы.
+_is_new_db = not db.DB_PATH.exists() or db.DB_PATH.stat().st_size == 0
+_conn = db.get_connection()
+db.init_db(_conn)
+_conn.close()
+if _is_new_db:
     print("База данных 'cfa.db' успешно создана (пустая — пользователи появятся после регистрации).")
 
 
