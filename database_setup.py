@@ -364,6 +364,7 @@ def block_user(conn: sqlite3.Connection, chain, admin_id: int, user_id: int, rea
         evm = _chain_tx(chain, conn, "setParticipant", _addr(chain, user), False, False)
         append_ledger_block(conn, user_id, "KYC_BLOCK", 0, f"Доступ к платформе заблокирован: {reason.strip()}", evm)
         log_admin_action(conn, admin_id, "USER_BLOCK", "user", user_id, reason.strip(), evm)
+    return {"evm_tx_hash": evm}
 
 
 # ==============================================================================

@@ -25,7 +25,7 @@ import database_setup as db
 import reports
 import validators
 from blockchain import ISSUE_STATUS as CHAIN_ISSUE_STATUS
-from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, USER_STATUS, api_approved_required, api_login_required,
+from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, USER_STATUS, api_approved_required,
                     chain, close_db, current_user, get_db, init_chain, json_error, register_filters)
 
 app = Flask(__name__)

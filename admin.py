@@ -17,7 +17,7 @@ import csv
 import io
 import json
 
-from flask import Blueprint, Response, abort, jsonify, render_template, request, url_for
+from flask import Blueprint, Response, abort, jsonify, render_template, request
 
 import database_setup as db
 import kyc_checks
