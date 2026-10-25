@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Личный кабинет — Платформа ЦФА{% endblock %}
+{% macro nav(key, label) %}
+  <a href="{{ url_for('cabinet_tab', tab=key) }}" class="sidebar-link {{ 'sidebar-link--active' if tab == key }}">
+    <span class="sidebar-dot"></span><span>{{ label }}</span>
+  </a>
+{% endmacro %}
+{% block content %}
+<main id="screen-cabinet">
+  <div class="cabinet-layout">
+    <aside class="cabinet-sidebar">
+      <div class="sidebar-section-label">Личный кабинет</div>
+      <nav class="sidebar-nav">
+        {{ nav('wallets', 'Мои кошельки') }}
+        {{ nav('products', 'Продукты') }}
+        {{ nav('history', 'История операций') }}
+        {{ nav('reports', 'Отчёты') }}
+        {{ nav('profile', 'Данные клиента') }}
+      </nav>
+      <div class="sidebar-section-label">Кабинет ЦФА</div>
+      <div class="sidebar-sub-label">Инвестор</div>
+      <nav class="sidebar-nav">
+        {{ nav('assets', 'Мои активы') }}
+        {{ nav('operations', 'Операции') }}
+        {{ nav('coupons', 'Выплаты по купонам') }}
+      </nav>
+      <div class="sidebar-sub-label">Эмитент</div>
+      <nav class="sidebar-nav">
+        {{ nav('issuer', 'Мои выпуски') }}
+      </nav>
+    </aside>
+
+    <div class="cabinet-content">
+      <section class="cabinet-pane">
+        {% block pane %}{% endblock %}
+      </section>
+    </div>
+  </div>
+</main>
+{% endblock %}

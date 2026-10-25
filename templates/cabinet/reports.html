@@ -1,0 +1,24 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Отчёты</h2>
+    <p class="pane-desc">Формирование и скачивание документов, выписок из реестра владельцев ЦФА и финансовой отчётности</p>
+  </div>
+</div>
+<div id="reports-container" class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Наименование отчета</th><th>Период</th><th>Дата формирования</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Выписка по операциям кошелька и реестру ОИС</td><td>За всё время</td><td>{{ today }}</td>
+        <td><a class="btn-secondary btn-link" href="{{ url_for('report_csv', kind='ledger') }}">Скачать CSV</a></td>
+      </tr>
+      <tr>
+        <td>Выписка из реестра владельцев ЦФА (портфель)</td><td>На {{ today }}</td><td>{{ today }}</td>
+        <td><a class="btn-secondary btn-link" href="{{ url_for('report_csv', kind='portfolio') }}">Скачать CSV</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

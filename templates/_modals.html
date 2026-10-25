@@ -1,0 +1,84 @@
+<!-- Покупка ЦФА -->
+<div id="modal-buy" class="modal-backdrop hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 style="margin: 0;">Подача заявки на покупку ЦФА</h3>
+      <button type="button" class="modal-close" onclick="closeModal('modal-buy')">&times;</button>
+    </div>
+    <form id="form-buy-cfa" class="light-form-grid">
+      <input type="hidden" name="issue_id">
+      <div class="light-field light-field--full">
+        <label>Выпуск</label>
+        <div id="buy-issue-title" class="static-value"></div>
+      </div>
+      <div class="light-field light-field--full">
+        <label>Цифровой кошелёк</label>
+        <select name="buy_wallet" disabled>
+          <option>{{ my_wallet.wallet_name if my_wallet else 'Основной кошелёк' }}{% if my_wallet %} — свободно {{ my_wallet.balance_rub|rub }}{% endif %}</option>
+        </select>
+      </div>
+      <div class="light-field light-field--full">
+        <label>Количество ЦФА к приобретению (шт.)</label>
+        <input type="number" name="qty" min="1" placeholder="10" required>
+        <small id="buy-total" class="field-hint"></small>
+      </div>
+      <div class="light-field light-field--full">
+        <label>Код подтверждения ({{ 'ПЭП СМС 1234' if me and me.role == 'FL' else 'УКЭП — любой код' }})</label>
+        <input type="text" name="sign_code" placeholder="Введите код подтверждения" required>
+      </div>
+      <div id="buy-error" class="form-error hidden light-field--full"></div>
+      <div class="light-field light-field--full" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+        <button type="button" class="subtab-btn" onclick="closeModal('modal-buy')">Отмена</button>
+        <button type="submit" class="btn-primary">Подтвердить заявку</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Кошелёк -->
+<div id="modal-wallet" class="modal-backdrop hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 style="margin: 0;">Операция по цифровому кошельку</h3>
+      <button type="button" class="modal-close" onclick="closeModal('modal-wallet')">&times;</button>
+    </div>
+    <form id="form-wallet-op" class="light-form-grid">
+      <div class="light-field light-field--full">
+        <label>Способ операции</label>
+        <select name="wallet_method">
+          {% if me and me.role == 'UL' %}
+          <option value="deposit">Пополнение по реквизитам номинального счета (для ЮЛ)</option>
+          {% else %}
+          <option value="deposit">Пополнение через СБП / SberPay (для ФЛ)</option>
+          {% endif %}
+          <option value="withdraw">Вывод средств на банковский счет</option>
+        </select>
+      </div>
+      <div class="light-field light-field--full">
+        <label>Сумма (₽)</label>
+        <input type="number" name="amount" min="1" placeholder="100000" required>
+      </div>
+      <div id="wallet-error" class="form-error hidden light-field--full"></div>
+      <div class="light-field light-field--full" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+        <button type="button" class="subtab-btn" onclick="closeModal('modal-wallet')">Отмена</button>
+        <button type="submit" class="btn-primary">Выполнить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Документ -->
+<div id="modal-doc" class="modal-backdrop hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="doc-title" style="margin: 0;">Просмотр документа платформы</h3>
+      <button type="button" class="modal-close" onclick="closeModal('modal-doc')">&times;</button>
+    </div>
+    <p id="doc-text" style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 18px;">
+      Здесь отображаются PDF-документы платформы: Правила ОИС, Решение о выпуске ЦФА, выписки.
+    </p>
+    <div style="display: flex; justify-content: flex-end;">
+      <button type="button" class="btn-primary" onclick="closeModal('modal-doc')">Закрыть</button>
+    </div>
+  </div>
+</div>

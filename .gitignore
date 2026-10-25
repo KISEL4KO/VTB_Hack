@@ -1,0 +1,22 @@
+# Виртуальное окружение Python
+.venv/
+venv/
+env/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+
+# Локальная база данных — у каждого своя, создаётся при запуске
+cfa.db
+*.db-journal
+
+# Секреты и настройки окружения
+.env
+
+# IDE и системные файлы
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,34 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Продукты и документы</h2>
+    <p class="pane-desc">Управление подключенными продуктами и ознакомление с регламентами информационной системы</p>
+  </div>
+</div>
+<div id="products-container" class="docs-grid">
+  <div class="doc-box">
+    <div>
+      <h3 class="doc-box__title">Документы платформы</h3>
+      <p class="doc-box__text">Общие документы для Информационной системы</p>
+      <button type="button" class="doc-box__link" data-doc="Правила пользования Платформой «Цифровые активы»" data-doc-text="Правила определяют порядок доступа участников к платформе, заключения сделок и расчётов.">📄 Правила пользования Платформой «Цифровые активы».pdf</button>
+      <button type="button" class="doc-box__link" data-doc="Условия проведения денежных расчетов" data-doc-text="Расчёты по сделкам осуществляются по схеме «поставка против платежа» (DvP) через цифровые кошельки участников.">📄 Условия проведения денежных расчетов.pdf</button>
+    </div>
+    <div class="doc-box__footer">
+      <span class="badge badge--green">✓ Подключено</span>
+      <span style="color: var(--text-secondary);">Регламент ОИС</span>
+    </div>
+  </div>
+  <div class="doc-box">
+    <div>
+      <h3 class="doc-box__title">Цифровые финансовые активы (ЦФА)</h3>
+      <p class="doc-box__text">Права в цифровом формате, учет и обращение которых осуществляется в информационной системе</p>
+      <button type="button" class="doc-box__link" data-doc="Правила информационной системы" data-doc-text="Правила информационной системы, в которой осуществляется выпуск ЦФА (259-ФЗ).">📄 Правила информационной системы.pdf</button>
+    </div>
+    <div class="doc-box__footer">
+      <span class="badge badge--green">✓ Подключено</span>
+      <a class="doc-box__link" href="{{ url_for('cabinet_tab', tab='wallets') }}">Кошельки →</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

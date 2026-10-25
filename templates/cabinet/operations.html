@@ -1,0 +1,27 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Операции</h2>
+    <p class="pane-desc">Детализированная история инвестиционных сделок и движений цифровых активов</p>
+  </div>
+</div>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>№ заявки / Дата</th><th>Выпуск ЦФА</th><th>Кол-во (шт.)</th><th>Сумма сделки (₽)</th><th>Подпись (ПЭП / УКЭП)</th><th>Статус</th></tr></thead>
+    <tbody id="operations-tbody">
+      {% for o in orders %}
+      {% set st = order_status[o.status] %}
+      <tr>
+        <td>№{{ o.id }}<br><small>{{ o.created_at }}</small></td>
+        <td>{{ o.title }}</td><td>{{ o.qty }}</td><td>{{ o.total_rub|rub }}</td>
+        <td>{{ 'ПЭП (СМС)' if o.sign_type == 'PEP_SMS' else 'УКЭП' }}<br><small>{{ o.signature_hash[:22] }}…</small></td>
+        <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">Заявок пока нет. Купить ЦФА можно на витрине «Рынок ЦФА».</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

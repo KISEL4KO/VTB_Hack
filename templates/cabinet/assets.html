@@ -1,0 +1,26 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Мои активы</h2>
+    <p class="pane-desc">Структура и общая стоимость портфеля купленных ЦФА на балансе смарт-контракта</p>
+  </div>
+</div>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Выпуск ЦФА</th><th>Эмитент</th><th>Кол-во (шт.)</th><th>Оценка позиции (₽)</th><th>Статус выпуска</th></tr></thead>
+    <tbody id="assets-tbody">
+      {% for a in assets %}
+      {% set st = issue_status[a.status] %}
+      <tr>
+        <td>{{ a.title }}</td><td>{{ a.issuer_name }}</td><td>{{ a.qty }}</td>
+        <td>{{ (a.qty * a.price_per_cfa)|rub }}</td>
+        <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-cell">В портфеле пока нет ЦФА. Заявки исполняются после закрытия сбора эмитентом (DvP).</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

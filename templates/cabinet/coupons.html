@@ -1,0 +1,25 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Выплаты по купонам</h2>
+    <p class="pane-desc">График и фактический учет полученных купонных доходов и погашений номинала</p>
+  </div>
+</div>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Выпуск ЦФА</th><th>Дата выплаты</th><th>Ставка (% годовых)</th><th>Сумма выплаты (₽)</th><th>Статус</th></tr></thead>
+    <tbody id="coupons-tbody">
+      {% for c in coupons %}
+      <tr>
+        <td>{{ c.title }}</td><td>{{ c.maturity_date }}</td><td>{{ c.coupon_rate }}%</td>
+        <td>{{ c.expected_coupon_rub|rub }}</td>
+        <td><span class="badge badge--{{ 'amber' if c.status == 'ISSUED' else 'blue' }}">{{ 'Ожидается' if c.status == 'ISSUED' else 'Выплачено' }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-cell">Купонных выплат пока нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

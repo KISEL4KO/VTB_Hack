@@ -1,0 +1,62 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Мои выпуски (Конструктор ЦФА по релизу 100735)</h2>
+    <p class="pane-desc">Подготовка Решения о выпуске фиксированных ЦФА, подписание УКЭП и публикация на витрине</p>
+  </div>
+</div>
+{% if me.role != 'UL' %}
+<div class="light-form-card">Выпускать ЦФА могут только юридические лица и ИП (259-ФЗ). Войдите на платформу как юрлицо.</div>
+{% else %}
+<form id="form-issuer" class="light-form-card">
+  <h3 style="margin: 0 0 14px 0; font-size: 16px;">Параметры нового выпуска ЦФА</h3>
+  <div class="light-form-grid">
+    <div class="light-field"><label>Краткое наименование ЦФА</label><input type="text" name="title" placeholder="Например: ЦФА-Альфа-01" required></div>
+    <div class="light-field"><label>Номинальная цена 1 ЦФА (₽)</label><input type="number" name="price_per_cfa" min="1" placeholder="1000" required></div>
+    <div class="light-field"><label>Минимальный объем выпуска (шт.) — порог успеха</label><input type="number" name="min_qty" min="1" placeholder="100" required></div>
+    <div class="light-field"><label>Максимальный объем выпуска (шт.)</label><input type="number" name="max_qty" min="1" placeholder="1000" required></div>
+    <div class="light-field"><label>Фиксированная ставка дохода (% годовых)</label><input type="number" step="0.1" name="coupon_rate" placeholder="19.5" required></div>
+    <div class="light-field"><label>Дата погашения</label><input type="date" name="maturity_date" required></div>
+    <div class="light-field light-field--full"><label>Категория инвесторов (по 259-ФЗ)</label>
+      <select name="only_qual">
+        <option value="false">Всем инвесторам (ФЛ с лимитом 600 тыс. ₽ и ЮЛ)</option>
+        <option value="true">Только квалифицированным инвесторам и ЮЛ</option>
+      </select>
+    </div>
+    <div id="issuer-error" class="form-error hidden light-field--full"></div>
+    <div class="light-field light-field--full" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 6px;">
+      <button type="submit" class="btn-primary">Подписать Решение о выпуске (УКЭП) и опубликовать</button>
+    </div>
+  </div>
+</form>
+
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>ID</th><th>Наименование</th><th>Номинал</th><th>Собрано / План (шт.)</th><th>Статус выпуска</th><th>Управление сбором (DvP)</th></tr></thead>
+    <tbody id="issuer-releases-tbody">
+      {% for i in my_issues %}
+      {% set st = issue_status[i.status] %}
+      <tr>
+        <td>{{ i.evm_token_id or i.id }}</td>
+        <td>{{ i.title }}</td>
+        <td>{{ i.price_per_cfa|rub }}</td>
+        <td>{{ i.collected_qty }} / {{ i.max_qty }} <small>(мин. {{ i.min_qty }})</small></td>
+        <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span></td>
+        <td>
+          {% if i.status == 'SUBSCRIPTION' %}
+          <button type="button" class="btn-secondary" data-finalize="{{ i.id }}"
+                  data-confirm="{{ 'Закрыть сбор и выполнить расчёт DvP?' if i.collected_qty >= i.min_qty else 'Минимум не набран — выпуск будет отменён, деньги вернутся инвесторам. Продолжить?' }}">
+            Закрыть сбор
+          </button>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">У вас пока нет выпусков</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

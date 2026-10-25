@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Регистрация' if mode == 'register' else 'Вход' }} — Платформа ЦФА{% endblock %}
+{% block content %}
+<main id="screen-auth">
+  <div class="auth-wrapper">
+    <div class="auth-grid">
+      <div>
+        <h1 class="auth-welcome-title">Добро пожаловать!</h1>
+
+        <!-- Переключатель «Вход / Регистрация» -->
+        <div class="auth-mode-tabs" role="tablist">
+          <button type="button" id="btn-mode-login" role="tab"
+                  class="auth-mode-tab {{ 'auth-mode-tab--active' if mode != 'register' }}"
+                  onclick="switchAuthMode('login')">Вход</button>
+          <button type="button" id="btn-mode-register" role="tab"
+                  class="auth-mode-tab {{ 'auth-mode-tab--active' if mode == 'register' }}"
+                  onclick="switchAuthMode('register')">Регистрация</button>
+        </div>
+
+        <!-- ===================== ВХОД ПО ЛОГИНУ И ПАРОЛЮ ===================== -->
+        <form id="form-login" class="figma-blue-questionnaire auth-login-card {{ 'hidden' if mode == 'register' }}" novalidate>
+          <p class="figma-blue-questionnaire__lead">Войдите по логину и паролю, указанным при регистрации.</p>
+          <div class="form-field">
+            <label for="login-login">Логин</label>
+            <input type="text" id="login-login" name="login" autocomplete="username" placeholder="ivanov_ivan">
+          </div>
+          <div class="form-field">
+            <label for="login-password">Пароль</label>
+            <input type="password" id="login-password" name="password" autocomplete="current-password" placeholder="••••••••">
+          </div>
+          <div id="login-error" class="form-error hidden"></div>
+          <div class="auth-submit-row auth-submit-row--in-card">
+            <button type="submit" class="auth-login-pill auth-login-pill--light">Войти</button>
+          </div>
+        </form>
+        <p class="auth-switch-line {{ 'hidden' if mode == 'register' }}" id="switch-to-register">
+          Нет аккаунта? <button type="button" class="auth-link-btn" onclick="switchAuthMode('register')">Зарегистрироваться</button>
+        </p>
+
+        <!-- ===================== РЕГИСТРАЦИЯ ===================== -->
+        <form id="form-register" class="{{ 'hidden' if mode != 'register' }}" novalidate>
+          <div class="auth-role-tabs">
+            <button type="button" id="btn-role-fl" class="auth-role-tab auth-role-tab--active" onclick="switchAuthRole('fl')">Для физ лиц</button>
+            <button type="button" id="btn-role-ul" class="auth-role-tab" onclick="switchAuthRole('ul')">Для юр лиц</button>
+          </div>
+
+          <div class="figma-blue-questionnaire">
+            <div class="form-group-title form-group-title--first">Учётная запись</div>
+            <div class="form-grid-2">
+              <div class="form-field form-field--full">
+                <label for="reg-login">Логин</label>
+                <input type="text" id="reg-login" name="login" autocomplete="username" placeholder="ivanov_ivan">
+                <small class="field-hint">3–32 символа: латинские буквы, цифры, _ . - (регистр не важен)</small>
+              </div>
+              <div class="form-field">
+                <label for="reg-password">Пароль</label>
+                <input type="password" id="reg-password" name="password" autocomplete="new-password" placeholder="Не короче 8 символов">
+                <small class="field-hint">Минимум 8 символов, буква и цифра</small>
+              </div>
+              <div class="form-field">
+                <label for="reg-password2">Повторите пароль</label>
+                <input type="password" id="reg-password2" name="password2" autocomplete="new-password" placeholder="Ещё раз">
+              </div>
+            </div>
+
+            <!-- Анкета физлица. Неактивный fieldset (disabled) не попадает в FormData и не проверяется. -->
+            <fieldset id="fs-fl" class="auth-fieldset">
+              <p class="figma-blue-questionnaire__lead auth-fieldset__lead">
+                Анкета физического лица (данные могут быть тестовыми, но в правильном формате):
+              </p>
+
+              <div class="form-group-title">1. Основные идентификационные данные</div>
+              <div class="form-grid-2">
+                <div class="form-field form-field--full">
+                  <label>ФИО</label>
+                  <input type="text" name="fl_fio" placeholder="Иванов Иван Иванович">
+                </div>
+                <div class="form-field">
+                  <label>Дата рождения</label>
+                  <input type="date" name="fl_birth_date" min="1900-01-01">
+                </div>
+                <div class="form-field">
+                  <label>Гражданство</label>
+                  <input type="text" name="fl_citizenship" placeholder="РФ">
+                </div>
+                <div class="form-field form-field--full">
+                  <label>Место рождения</label>
+                  <input type="text" name="fl_birth_place" data-suggest="cities" autocomplete="off"
+                         placeholder="Начните вводить город, например: Москва">
+                </div>
+              </div>
+
+              <div class="form-group-title">2. Контактные данные</div>
+              <div class="form-grid-2">
+                <div class="form-field">
+                  <label>Подтвержденный мобильный телефон</label>
+                  <input type="tel" name="fl_phone" placeholder="+7 (999) 000-00-00">
+                </div>
+                <div class="form-field">
+                  <label>Адрес электронной почты</label>
+                  <input type="email" name="fl_email" placeholder="user@example.ru">
+                </div>
+              </div>
+
+              <div class="form-group-title">3. Паспортные данные</div>
+              <div class="form-grid-2">
+                <div class="form-field">
+                  <label>Серия и номер паспорта</label>
+                  <input type="text" name="fl_passport_num" data-digits maxlength="10" inputmode="numeric"
+                         placeholder="4500123456">
+                  <small class="field-hint">10 цифр подряд: серия и номер</small>
+                </div>
+                <div class="form-field">
+                  <label>Код подразделения, кем и когда выдан</label>
+                  <input type="text" name="fl_passport_issued" placeholder="770-001, ГУ МВД России">
+                </div>
+              </div>
+
+              <div class="form-group-title">4. Адрес регистрации (прописки)</div>
+              <div class="form-grid-2">
+                <div class="form-field form-field--full">
+                  <label>Город</label>
+                  <input type="text" name="fl_reg_city" data-suggest="cities" data-strict autocomplete="off"
+                         placeholder="Начните вводить и выберите город из списка">
+                </div>
+                <div class="form-field form-field--full">
+                  <label>Улица, дом, квартира</label>
+                  <input type="text" name="fl_reg_street" placeholder="ул. Ленина, д. 1, кв. 1">
+                </div>
+              </div>
+
+              <div class="form-group-title">5. Налоговые идентификаторы и Статус инвестора</div>
+              <div class="form-grid-2">
+                <div class="form-field">
+                  <label>ИНН (для удержания НДФЛ)</label>
+                  <input type="text" name="fl_inn" placeholder="770000000000" inputmode="numeric">
+                </div>
+                <div class="form-field">
+                  <label>СНИЛС</label>
+                  <input type="text" name="fl_snils" placeholder="000-000-000 00" inputmode="numeric">
+                </div>
+                <div class="form-field form-field--full">
+                  <label>Статус инвестора (влияет на лимиты покупки ЦФА по 259-ФЗ)</label>
+                  <select name="fl_investor_status">
+                    <option value="unqualified">Неквалифицированный инвестор (лимит 600 000 ₽ в год)</option>
+                    <option value="qualified">Квалифицированный инвестор (без лимита)</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Анкета юрлица -->
+            <fieldset id="fs-ul" class="auth-fieldset hidden" disabled>
+              <p class="figma-blue-questionnaire__lead auth-fieldset__lead">
+                Анкета юридического лица (данные могут быть тестовыми, но в правильном формате):
+              </p>
+
+              <div class="form-group-title">1. Данные организации / ИП</div>
+              <div class="form-grid-2">
+                <div class="form-field form-field--full">
+                  <label>Сокращённое наименование компании (или ИП)</label>
+                  <input type="text" name="ul_company_name" placeholder="ООО «Альфа-Инвест»">
+                  <small class="field-hint">С формой собственности: ООО «…», АО «…», ПАО «…», ИП Фамилия И. О.</small>
+                </div>
+                <div class="form-field">
+                  <label>ОГРН / ОГРНИП</label>
+                  <input type="text" name="ul_ogrn" placeholder="1187700000000" inputmode="numeric">
+                </div>
+                <div class="form-field">
+                  <label>ИНН и КПП</label>
+                  <input type="text" name="ul_inn_kpp" placeholder="7700000000 / 770001001">
+                </div>
+              </div>
+
+              <div class="form-group-title">2. Юридический адрес компании</div>
+              <div class="form-grid-2">
+                <div class="form-field form-field--full">
+                  <label>Город</label>
+                  <input type="text" name="ul_addr_city" data-suggest="cities" data-strict autocomplete="off"
+                         placeholder="Начните вводить и выберите город из списка">
+                </div>
+                <div class="form-field form-field--full">
+                  <label>Улица, дом, офис</label>
+                  <input type="text" name="ul_addr_street" placeholder="Пресненская наб., д. 10, оф. 5">
+                </div>
+              </div>
+
+              <div class="form-group-title">3. Данные уполномоченного представителя (пользователя)</div>
+              <div class="form-grid-2">
+                <div class="form-field form-field--full">
+                  <label>ФИО и контакты лица, осуществляющего вход</label>
+                  <input type="text" name="ul_rep_fio" placeholder="Смирнов Алексей Викторович">
+                </div>
+                <div class="form-field">
+                  <label>Серия и номер паспорта представителя</label>
+                  <input type="text" name="ul_rep_passport" data-digits maxlength="10" inputmode="numeric"
+                         placeholder="4510654321">
+                  <small class="field-hint">10 цифр подряд: серия и номер</small>
+                </div>
+                <div class="form-field">
+                  <label>ИНН представителя</label>
+                  <input type="text" name="ul_rep_inn" data-digits maxlength="12" inputmode="numeric"
+                         placeholder="770000000000">
+                </div>
+                <div class="form-field form-field--full">
+                  <label>Полномочия и роли (право подписи и уровень доступа)</label>
+                  <select name="ul_rep_role">
+                    <option value="signer">Право подписи сделок и выпуска ЦФА от лица компании (УКЭП)</option>
+                    <option value="viewer">Только просмотр витрины и отчетов</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group-title">4. Банковские реквизиты</div>
+              <div class="form-grid-2">
+                <div class="form-field">
+                  <label>Расчетный счет организации (привязывается к кошельку)</label>
+                  <input type="text" name="ul_bank_account" placeholder="40702810000000000000" inputmode="numeric">
+                </div>
+                <div class="form-field">
+                  <label>БИК банка</label>
+                  <input type="text" name="ul_bank_bik" placeholder="044525225" inputmode="numeric">
+                </div>
+              </div>
+            </fieldset>
+
+            <div id="register-error" class="form-error hidden"></div>
+            <div class="auth-submit-row auth-submit-row--in-card">
+              <button type="submit" class="auth-login-pill auth-login-pill--light">Зарегистрироваться</button>
+            </div>
+          </div>
+
+          <p class="auth-switch-line">
+            Уже есть аккаунт? <button type="button" class="auth-link-btn" onclick="switchAuthMode('login')">Войти</button>
+          </p>
+        </form>
+      </div>
+
+      <div class="auth-art-box">
+        <img class="auth-art-box__img" src="{{ url_for('static', filename='img/auth-art.jpg') }}" alt="Иллюстрация">
+        <p class="auth-art-box__caption">
+          Войдите по логину и паролю или нажмите «Регистрация»: придумайте логин и пароль,
+          выберите тип участника и заполните анкету. Поля с ошибками подсвечиваются красным.
+        </p>
+      </div>
+    </div>
+  </div>
+</main>
+<script>window.AUTH_NEXT = {{ next|tojson }};</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Мои кошельки</h2>
+    <p class="pane-desc">Список подключенных цифровых кошельков, EVM-адрес в блокчейне и управление рублевым балансом</p>
+  </div>
+  <button type="button" class="btn-primary" onclick="openModal('modal-wallet')">Пополнить / Вывести</button>
+</div>
+<div id="wallets-container" class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr>
+      <th>Название кошелька</th><th>EVM-адрес (Solidity)</th><th>Свободно</th><th>В резерве</th><th>Банковский счёт</th><th>Статус</th>
+    </tr></thead>
+    <tbody>
+      {% if wallet %}
+      <tr>
+        <td>{{ wallet.wallet_name }}</td>
+        <td><span class="code-tag">{{ me.evm_address }}</span></td>
+        <td>{{ wallet.balance_rub|rub }}</td>
+        <td>{{ wallet.locked_rub|rub }}</td>
+        <td>{{ wallet.bank_account }}<br><small>БИК {{ wallet.bank_bik }}</small></td>
+        <td><span class="badge badge--green">{{ 'Активен' if wallet.status == 'ACTIVE' else wallet.status }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">Кошелёк не найден</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

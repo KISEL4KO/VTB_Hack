@@ -1,0 +1,28 @@
+{% extends "cabinet/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">История операций</h2>
+    <p class="pane-desc">Общий журнал всех транзакций, списаний и зачислений по кошелькам и смарт-контракту</p>
+  </div>
+</div>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Дата и время</th><th>Тип операции</th><th>Сумма (₽)</th><th>Описание</th><th>TxHash (EVM Блокчейн)</th><th>Статус</th></tr></thead>
+    <tbody id="history-tbody">
+      {% for r in ledger %}
+      <tr>
+        <td>{{ r.created_at }}</td>
+        <td>{{ op_types.get(r.op_type, r.op_type) }}</td>
+        <td>{{ r.amount_rub|rub }}</td>
+        <td>{{ r.description }}</td>
+        <td><span class="code-tag" title="{{ r.tx_hash }}">{{ r.tx_hash[:18] }}…</span></td>
+        <td><span class="badge badge--green">Подтверждено</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">Операций пока нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

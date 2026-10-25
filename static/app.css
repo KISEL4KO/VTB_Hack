@@ -1,0 +1,81 @@
+a.sidebar-link, a.doc-box__link, a.btn-link { text-decoration: none; }
+a.sidebar-link { color: var(--text-secondary); }
+a.sidebar-link.sidebar-link--active { color: inherit; }
+.btn-link { display: inline-block; padding: 8px 14px; }
+.top-header__user { color: #fff; font-size: 14px; margin-right: 12px; opacity: .9; }
+.top-header__logout { background: transparent; border: 1px solid rgba(255,255,255,.6); color: #fff; border-radius: 999px; padding: 8px 16px; cursor: pointer; margin-left: 8px; font: inherit; font-size: 14px; }
+.top-header__right { display: flex; align-items: center; }
+.progress { height: 6px; background: var(--border-color); border-radius: 999px; overflow: hidden; margin-top: 14px; }
+.progress__bar { height: 100%; background: var(--green-accent); }
+.progress__text { font-size: 12px; color: var(--text-secondary); margin: 6px 0 0; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.empty-cell { text-align: center; color: var(--text-secondary); padding: 22px 12px !important; }
+.form-error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 10px; padding: 10px 14px; font-size: 14px; margin: 10px 0; }
+.demo-hint { font-size: 13px; color: var(--text-secondary); background: var(--blue-soft); border-radius: 12px; padding: 10px 14px; margin: 12px 0 18px; line-height: 1.6; }
+.demo-hint code { background: #fff; padding: 1px 6px; border-radius: 6px; }
+.static-value { padding: 10px 12px; background: var(--bg-muted); border: 1px solid var(--border-color); border-radius: 10px; font-weight: 600; }
+.field-hint { color: var(--text-secondary); display: block; margin-top: 4px; }
+.toast { position: fixed; right: 20px; bottom: 20px; background: #0F172A; color: #fff; padding: 12px 18px; border-radius: 12px; z-index: 1000; font-size: 14px; max-width: 360px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.toast.hidden { display: none; }
+
+/* ===================== Вход / Регистрация ===================== */
+.auth-mode-tabs { display: flex; gap: 6px; background: var(--bg-muted); border: 1px solid var(--border-color); border-radius: 999px; padding: 5px; max-width: 360px; margin: 0 auto 22px; }
+.auth-mode-tab { flex: 1; background: transparent; border: 0; border-radius: 999px; padding: 10px 16px; font-size: 16px; font-weight: 700; color: var(--text-secondary); cursor: pointer; transition: background .15s ease, color .15s ease; }
+.auth-mode-tab:hover { color: var(--text-main); }
+.auth-mode-tab--active { background: #fff; color: var(--blue-header-dark); box-shadow: 0 2px 8px rgba(15,23,42,.08); }
+
+.auth-login-card { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.auth-submit-row--in-card { margin: 18px 0 0; }
+.auth-login-pill--light { background: #fff; color: var(--blue-header-dark); box-shadow: 0 6px 18px rgba(15,23,42,.18); }
+.auth-login-pill:disabled { opacity: .6; cursor: wait; transform: none; }
+
+.auth-switch-line { text-align: center; font-size: 14px; color: var(--text-secondary); margin: 16px 0 0; }
+.auth-link-btn { background: none; border: 0; padding: 0; color: var(--blue-header-dark); font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+.auth-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.auth-fieldset__lead { margin: 22px 0 0; }
+.form-group-title--first { margin-top: 0; }
+.figma-blue-questionnaire .field-hint { color: rgba(255,255,255,.72); font-size: 11.5px; margin-top: 0; }
+.figma-blue-questionnaire .form-error { margin: 16px 0 0; }
+
+/* Подсветка корректных / некорректных полей */
+.form-field input.is-invalid, .form-field select.is-invalid {
+  border: 2px solid #F87171; background: #FFF1F2;
+  box-shadow: 0 0 0 3px rgba(248,113,113,.35);
+}
+.form-field input.is-valid, .form-field select.is-valid { border: 2px solid #34D399; }
+.field-error { display: block; font-size: 12px; font-weight: 600; line-height: 1.35; color: #fff; background: rgba(185,28,28,.88); border-radius: 8px; padding: 4px 8px; }
+.field-error::before { content: "⚠ "; }
+.form-field:has(.field-error) .field-hint { display: none; }
+.demo-hint { margin-top: 18px; }
+
+@media (max-width: 640px) {
+  .auth-grid { padding: 24px 16px; }
+  .form-grid-2 { grid-template-columns: 1fr; }
+  .figma-blue-questionnaire { padding: 22px 16px; }
+  .auth-role-tab { font-size: 16px; padding: 8px 8px; }
+  .auth-role-tabs { gap: 8px; }
+  .auth-login-pill { width: 100%; }
+}
+/* Колонки сетки не должны распирать страницу шире экрана */
+.auth-grid > * { min-width: 0; }
+@media (max-width: 960px) { .auth-grid { grid-template-columns: minmax(0, 1fr); } }
+.form-grid-2 > *, .form-field { min-width: 0; }
+.form-field input, .form-field select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+@media (max-width: 960px) { .form-grid-2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* ===================== Подсказки городов ===================== */
+.suggest { position: relative; }
+.suggest-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+  list-style: none; margin: 0; padding: 6px; max-height: 300px; overflow-y: auto;
+  background: #fff; color: var(--text-main); border: 1px solid var(--border-color);
+  border-radius: 12px; box-shadow: 0 14px 32px rgba(15, 23, 42, .22);
+}
+.suggest-item { padding: 9px 12px; border-radius: 8px; font-size: 13px; line-height: 1.35; cursor: pointer; }
+.suggest-item b { color: var(--blue-header-dark); }
+.suggest-item:hover, .suggest-item--active { background: var(--blue-soft); }
+.suggest-empty { padding: 9px 12px; font-size: 13px; color: var(--text-secondary); }
+/* Список выпадает поверх ошибки/подсказки под полем */
+.suggest .field-error, .suggest .field-hint { position: relative; z-index: 1; }
+.form-field input[type="date"] { min-height: 40px; }
