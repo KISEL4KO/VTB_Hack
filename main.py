@@ -22,10 +22,10 @@ from flask import Flask, Response, abort, jsonify, redirect, render_template, re
 from werkzeug.security import check_password_hash, generate_password_hash  # werkzeug ставится вместе с Flask
 
 import database_setup as db
-import reports
 import validators
 from blockchain import ISSUE_STATUS as CHAIN_ISSUE_STATUS
-from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, USER_STATUS, api_approved_required,
+from common import REPORTS as reports
+from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, PDF_ERROR, USER_STATUS, api_approved_required, pdf_required,
                     chain, close_db, current_user, get_db, init_chain, json_error, register_filters)
 
 app = Flask(__name__)
@@ -59,6 +59,8 @@ if CHAIN.enabled:
           f"воспроизведено транзакций: {CHAIN.replayed}")
 else:
     print(f"Блокчейн выключен: {CHAIN.reason}")
+if PDF_ERROR:
+    print(PDF_ERROR)
 
 import admin  # noqa: E402  (регистрируем админ-панель после создания app)
 
@@ -298,6 +300,7 @@ def _issue_with_access(issue_id: int, public_ok: bool):
 
 
 @app.route("/docs/issues/<int:issue_id>/decision.pdf")
+@pdf_required
 def doc_decision(issue_id):
     """Решение о выпуске — публичный документ для опубликованных выпусков."""
     issue = _issue_with_access(issue_id, public_ok=True)
@@ -307,6 +310,7 @@ def doc_decision(issue_id):
 
 
 @app.route("/docs/issues/<int:issue_id>/results.pdf")
+@pdf_required
 def doc_results(issue_id):
     """Отчёт об итогах выпуска — эмитенту и администратору."""
     issue = _issue_with_access(issue_id, public_ok=False)
@@ -326,6 +330,7 @@ def doc_results(issue_id):
 
 
 @app.route("/docs/issues/<int:issue_id>/registry.pdf")
+@pdf_required
 def doc_registry(issue_id):
     """Реестр владельцев ЦФА выпуска — эмитенту и администратору."""
     issue = _issue_with_access(issue_id, public_ok=False)
@@ -343,6 +348,7 @@ def doc_registry(issue_id):
 
 
 @app.route("/docs/statement.pdf")
+@pdf_required
 def doc_statement():
     """Выписка по счёту текущего участника."""
     me = current_user()
@@ -365,6 +371,7 @@ def doc_statement():
 
 
 @app.route("/docs/orders/<int:order_id>.pdf")
+@pdf_required
 def doc_order(order_id):
     """Подтверждение заявки — её автору и администратору."""
     me = current_user()

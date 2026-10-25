@@ -10,10 +10,30 @@ from __future__ import annotations
 import sqlite3
 from functools import wraps
 
-from flask import abort, g, jsonify, redirect, request, session, url_for
+from flask import Response, abort, g, jsonify, redirect, request, session, url_for
 
 import database_setup as db
 from blockchain import Chain, ISSUE_STATUS as CHAIN_ISSUE_STATUS
+
+# ------------------------------------------------------------------------------
+# PDF-документы: если reportlab не установлен, платформа работает, а PDF недоступны
+# ------------------------------------------------------------------------------
+try:
+    import reports as REPORTS
+    PDF_ERROR = ""
+except ImportError as _e:  # pragma: no cover
+    REPORTS = None
+    PDF_ERROR = f"PDF-документы недоступны: не установлена библиотека reportlab ({_e}). Выполните: pip install reportlab"
+
+
+def pdf_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if REPORTS is None:
+            return Response(PDF_ERROR, status=503, mimetype="text/plain; charset=utf-8")
+        return fn(*args, **kwargs)
+    return wrapper
+
 
 # ------------------------------------------------------------------------------
 # Блокчейн — один экземпляр на приложение (создаётся в main.py при запуске)

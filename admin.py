@@ -21,10 +21,10 @@ from flask import Blueprint, Response, abort, jsonify, render_template, request
 
 import database_setup as db
 import kyc_checks
-import reports
 import validators
+from common import REPORTS as reports
 from common import (ADMIN_ACTIONS, CHAIN_METHODS, admin_required, chain, current_user, get_db, json_error,
-                    reconciliation)
+                    pdf_required, reconciliation)
 
 bp = Blueprint("admin", __name__)
 
@@ -120,6 +120,7 @@ def user_detail(user_id):
 
 
 @bp.route("/admin/users/<int:user_id>/application.pdf")
+@pdf_required
 @admin_required
 def user_pdf(user_id):
     conn = get_db()
@@ -284,6 +285,7 @@ def reports_page():
 
 
 @bp.route("/admin/reports/participants.pdf")
+@pdf_required
 @admin_required
 def participants_pdf():
     users = get_db().execute(
@@ -293,6 +295,7 @@ def participants_pdf():
 
 
 @bp.route("/admin/reports/reconciliation.pdf")
+@pdf_required
 @admin_required
 def reconciliation_pdf():
     ch = chain()

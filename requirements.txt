@@ -1,5 +1,10 @@
 Flask>=3.0
 # PDF-документы (Решение о выпуске, выписки, отчёты)
 reportlab>=4.2
-# Лёгкий EVM-блокчейн: web3 + встроенная виртуальная машина Ethereum (py-evm через eth-tester)
-web3[tester]==7.16.0
+# Лёгкий EVM-блокчейн: web3 + встроенная виртуальная машина Ethereum (py-evm через eth-tester).
+# Ставим пакеты по отдельности, а не «web3[tester]»: тот тянет safe-pysha3, который на Windows
+# требует компилятор C++. Хэш keccak берём из pycryptodome — у него есть готовые сборки для Windows.
+web3==7.16.0
+eth-tester==0.13.0b1
+py-evm==0.12.1b1
+eth-hash[pycryptodome]>=0.7
