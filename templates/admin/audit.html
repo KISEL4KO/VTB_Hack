@@ -14,7 +14,8 @@
       {% for a in rows %}
       <tr>
         <td>{{ a.created_at|ddmm }}</td><td>{{ a.admin_name }}</td><td>{{ action_names.get(a.action, a.action) }}</td>
-        <td><a href="{{ url_for('admin.user_detail', user_id=a.target_id) if a.target_type == 'user' else url_for('admin.issue_detail', issue_id=a.target_id) }}">{{ a.target_name }}</a></td>
+        <td>{% if a.target_type == 'settings' %}<a href="{{ url_for('admin.benchmarks') }}">{{ a.target_name }}</a>
+            {% else %}<a href="{{ url_for('admin.user_detail', user_id=a.target_id) if a.target_type == 'user' else url_for('admin.issue_detail', issue_id=a.target_id) }}">{{ a.target_name }}</a>{% endif %}</td>
         <td>{{ a.comment or '—' }}</td>
         <td>{% if a.evm_tx_hash %}<span class="code-tag code-tag--evm" title="{{ a.evm_tx_hash }}">{{ a.evm_tx_hash|short_hash(6) }}</span>{% else %}—{% endif %}</td>
       </tr>

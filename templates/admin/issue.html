@@ -58,6 +58,10 @@
   </div>
 
   <div>
+    <h3 class="block-title">Аналитика для инвесторов</h3>
+    <div class="admin-card" id="admin-dash"></div>
+    <script type="application/json" id="admin-issue-data">{{ {'issue': payload, 'bench': bench}|tojson }}</script>
+
     <h3 class="block-title">Подсказки модератору</h3>
     <ul class="check-list">
       {% for c in checks %}

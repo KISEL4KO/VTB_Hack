@@ -8,6 +8,8 @@ JSON API, PDF-документы участника и команды коман
 Админ-панель — в admin.py, общие помощники — в common.py.
 """
 
+from __future__ import annotations
+
 import csv
 import io
 import json
@@ -25,8 +27,8 @@ import database_setup as db
 import validators
 from blockchain import ISSUE_STATUS as CHAIN_ISSUE_STATUS
 from common import REPORTS as reports
-from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, PDF_ERROR, USER_STATUS, api_approved_required, pdf_required,
-                    chain, close_db, current_user, get_db, init_chain, json_error, register_filters)
+from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, PDF_ERROR, USER_STATUS, api_approved_required, get_benchmarks,
+                    issue_payload, issuer_track, pdf_required, chain, close_db, current_user, get_db, init_chain, json_error, register_filters)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cfa-dev-secret-change-me")
@@ -101,7 +103,25 @@ def home():
         ORDER BY CASE i.status WHEN 'SUBSCRIPTION' THEN 0 ELSE 1 END, i.id DESC
         """
     ).fetchall()
-    return render_template("market.html", issues=issues)
+    conn = get_db()
+    cfa_data = {"bench": get_benchmarks(conn), "issues": {str(i["id"]): issue_payload(conn, i) for i in issues}}
+    return render_template("market.html", issues=issues, cfa_data=cfa_data)
+
+
+@app.route("/issues/<int:issue_id>")
+def issue_page(issue_id):
+    """Аналитика выпуска: доходность, сравнение с ОФЗ и вкладами, график выплат, калькулятор, спрос, оценка."""
+    conn = get_db()
+    issue = conn.execute("""SELECT i.*, u.full_name AS issuer_name FROM cfa_issues i JOIN users u ON u.id = i.issuer_id
+                            WHERE i.id = ?""", (issue_id,)).fetchone()
+    if not issue:
+        abort(404)
+    me = current_user()
+    owner = me and (me["role"] == "ADMIN" or me["id"] == issue["issuer_id"])
+    if issue["status"] not in PUBLIC_STATUSES and not owner:
+        abort(404)
+    return render_template("issue_page.html", issue=issue, payload=issue_payload(conn, issue),
+                           bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]))
 
 
 @app.route("/login")
@@ -227,7 +247,7 @@ def issuer_new():
         "risks": ["market", "liquidity", "credit", "operational", "legal"], "risks_extra": "",
         "signer_name": "", "signer_position": "Генеральный директор", **validators.ROV_DEFAULTS,
     }
-    return render_template("cabinet/issuer_form.html", tab="issuer", rov=draft, issue=None, **_rov_choices())
+    return render_template("cabinet/issuer_form.html", tab="issuer", rov=draft, issue=None, **_rov_choices(user["id"]))
 
 
 @app.route("/cabinet/issuer/<int:issue_id>/edit")
@@ -242,12 +262,14 @@ def issuer_edit(issue_id):
         return redirect(url_for("cabinet_tab", tab="issuer"))
     rov = json.loads(issue["rov_json"])
     rov = {k: ("" if v is None else v) for k, v in rov.items()}
-    return render_template("cabinet/issuer_form.html", tab="issuer", rov=rov, issue=issue, **_rov_choices())
+    return render_template("cabinet/issuer_form.html", tab="issuer", rov=rov, issue=issue, **_rov_choices(user["id"], issue_id))
 
 
-def _rov_choices():
+def _rov_choices(issuer_id: int, issue_id: int | None = None):
+    conn = get_db()
     return {"risks_all": validators.ROV_RISKS, "coupon_periods": validators.ROV_COUPON_PERIODS,
-            "payments": validators.ROV_PAYMENT, "investors_all": validators.ROV_INVESTORS}
+            "payments": validators.ROV_PAYMENT, "investors_all": validators.ROV_INVESTORS,
+            "bench": get_benchmarks(conn), "track": issuer_track(conn, issuer_id, exclude_issue=issue_id)}
 
 
 # ==============================================================================

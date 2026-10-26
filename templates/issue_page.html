@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.title }} — аналитика — Платформа ЦФА{% endblock %}
+{% block content %}
+<main class="issue-page">
+  <a class="back-link" href="{{ url_for('home') }}">← Рынок ЦФА</a>
+
+  <section class="issue-hero">
+    <div>
+      <div class="issue-hero__badges">
+        <span class="badge badge--{{ issue_status[issue.status][1] }}">{{ issue_status[issue.status][0] }}</span>
+        <span class="badge badge--blue">{{ 'Для квалифицированных' if issue.only_qual else 'Для всех инвесторов' }}</span>
+        <span class="badge badge--blue">CFA-{{ '%06d' % issue.id }}</span>
+      </div>
+      <h1 class="issue-hero__title">{{ issue.title }}</h1>
+      <p class="issue-hero__sub">Эмитент: {{ issue.issuer_name }} · номинал {{ issue.price_per_cfa|rub }} · купон {{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} % годовых ·
+        погашение {{ issue.maturity_date|ddmm }}</p>
+      <div class="issue-hero__actions">
+        {% if issue.status == 'SUBSCRIPTION' and issue.placement_start <= today_iso <= issue.placement_end %}
+        <button type="button" class="btn-primary" data-buy="{{ issue.id }}" data-title="{{ issue.title }}" data-price="{{ issue.price_per_cfa }}"
+                data-left="{{ issue.max_qty - issue.collected_qty }}" data-min="{{ issue.min_order_qty }}"
+                data-max="{{ issue.max_order_qty or '' }}">Купить ЦФА</button>
+        {% endif %}
+        <a class="btn-secondary btn-link" href="{{ url_for('doc_decision', issue_id=issue.id) }}" target="_blank">Решение о выпуске (PDF)</a>
+      </div>
+    </div>
+    <div class="issue-hero__score" data-k="score" aria-live="polite"></div>
+  </section>
+
+  <div id="issue-dash">
+    <div class="kpi-grid kpi-grid--3" data-k="kpi"></div>
+
+    <div class="dash-two">
+      <div class="dash-card">
+        <h3>Доходность против альтернатив</h3>
+        <p class="dash-card__sub">Эффективная годовая доходность к погашению до НДФЛ. Вертикальная линия — ОФЗ того же срока: всё, что правее, — плата за риск эмитента.</p>
+        <div data-k="cmp"></div>
+      </div>
+      <div class="dash-card">
+        <h3>График выплат на 1 ЦФА</h3>
+        <p class="dash-card__sub">Купоны с даты закрытия сбора (DvP) до погашения. Наведите на столбец, чтобы увидеть сумму и накопленный доход.</p>
+        <div data-k="sch"></div>
+        <details class="dash-details"><summary>Таблица выплат</summary><div data-k="table"></div></details>
+      </div>
+    </div>
+
+    <div class="dash-card dash-calc">
+      <h3>Калькулятор: если вложить</h3>
+      <div class="calc-row">
+        <label class="calc-input"><input data-k="amount" inputmode="numeric" value="100000" aria-label="Сумма вложения, ₽"><span>₽</span></label>
+        <div class="calc-quick">
+          {% for a in [50000, 100000, 300000, 600000] %}<button type="button" class="chip" data-amount="{{ a }}">{{ a|num }} ₽</button>{% endfor %}
+        </div>
+      </div>
+      <div class="kpi-grid kpi-grid--4" data-k="calc"></div>
+      <p class="viz-note">Вклад считается под среднюю максимальную ставку на тот же срок с той же даты; к процентам по вкладу и купонам применён НДФЛ {{ bench.ndfl|int }} %. Учитываются ограничения заявки и остаток объёма.</p>
+    </div>
+
+    <div class="dash-two">
+      <div class="dash-card">
+        <h3>Из чего складывается оценка</h3>
+        <div data-k="parts"></div>
+      </div>
+      <div class="dash-card">
+        <h3>Спрос и условия</h3>
+        <div class="kpi-grid kpi-grid--2" data-k="demand"></div>
+        <div class="kv-row"><span>Обеспечение</span><b>{{ 'предусмотрено' if rov.collateral == 'yes' else 'не предусмотрено' }}</b></div>
+        <div class="kv-row"><span>Выкуп эмитентом</span><b>{{ 'предусмотрен' if rov.buyback == 'yes' else 'не предусмотрен' }}</b></div>
+        <div class="kv-row"><span>Досрочное погашение</span><b>{{ 'допускается' if rov.early_redemption == 'yes' else 'не допускается' }}</b></div>
+        <div class="kv-row"><span>В одной заявке</span><b>от {{ issue.min_order_qty|num }}{% if issue.max_order_qty %} до {{ issue.max_order_qty|num }}{% endif %} шт.</b></div>
+        <div class="kv-row"><span>История эмитента</span><b>состоялось {{ payload.issuerIssued }}, отменено {{ payload.issuerCancelled }}</b></div>
+      </div>
+    </div>
+
+    <details class="dash-card dash-method">
+      <summary><b>Как считаются показатели</b></summary>
+      <ul>
+        <li><b>Доходность к погашению</b> — эффективная годовая ставка (XIRR) по всем выплатам: купонам и номиналу. При ежеквартальных и ежемесячных выплатах она выше купонной ставки за счёт сложного процента.</li>
+        <li><b>После НДФЛ</b> — купоны облагаются по ставке {{ bench.ndfl|int }} %. Учитывается «заморозка»: деньги блокируются с момента заявки, а купон начисляется только после закрытия сбора.</li>
+        <li><b>Премия к ОФЗ</b> — разница с доходностью гособлигаций того же срока (линейная интерполяция по кривой). Это плата за риск эмитента: ниже нуля — государство платит больше без этого риска, выше 8–10 п.п. — рынок закладывает высокий риск.</li>
+        <li><b>Оценка 0–100</b> — сумма восьми составляющих (премия, срок, обеспечение, спрос, история эмитента, частота выплат, выкуп, реальная доходность). 70+ — привлекательно, 50–69 — умеренно, ниже 50 — слабо.</li>
+      </ul>
+      <p class="viz-note">Ориентиры на {{ bench.as_of|ddmm }}: ключевая ставка {{ bench.key_rate }} %, вклады {{ bench.deposit_rate }} %, инфляция {{ bench.inflation }} %. Источники: {{ bench.sources }}.</p>
+    </details>
+    <p class="viz-note">Аналитика — модель для сравнения выпусков между собой и с альтернативами, а не инвестиционная рекомендация. Доходность ЦФА не гарантирована, вложения не застрахованы АСВ.</p>
+  </div>
+</main>
+<script type="application/json" id="issue-data">{{ {'issue': payload, 'bench': bench}|tojson }}</script>
+{% endblock %}

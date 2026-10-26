@@ -45,7 +45,7 @@
           <p class="cfa-card__issuer">Эмитент: {{ i.issuer_name }}</p>
           <div class="cfa-card__metrics">
             <div><span class="cfa-card__metric-label">Цена 1 ЦФА</span><span class="cfa-card__metric-val">{{ i.price_per_cfa|rub }}</span></div>
-            <div><span class="cfa-card__metric-label">Доходность</span><span class="cfa-card__metric-val">{{ i.coupon_rate }}%</span></div>
+            <div><span class="cfa-card__metric-label">Купон</span><span class="cfa-card__metric-val">{{ ('%.1f' % i.coupon_rate)|replace('.', ',') }} %</span></div>
             <div><span class="cfa-card__metric-label">Объем</span><span class="cfa-card__metric-val">{{ (i.price_per_cfa * i.max_qty)|rub_short }}</span></div>
           </div>
           <div class="progress" title="Собрано {{ i.collected_qty }} из {{ i.max_qty }} шт.">
@@ -53,6 +53,7 @@
           </div>
           <p class="progress__text">Собрано {{ i.collected_qty|num }} из {{ i.max_qty|num }} шт. (минимум {{ i.min_qty|num }}) · погашение {{ i.maturity_date|ddmm }}</p>
           {% if i.status == 'SUBSCRIPTION' %}<p class="progress__text">Приём заявок: {{ i.placement_start|ddmm }} — {{ i.placement_end|ddmm }}</p>{% endif %}
+          <div class="cfa-card__analytics" data-analytics="{{ i.id }}"></div>
         </div>
         <div class="cfa-card__actions">
           {% if i.status == 'SUBSCRIPTION' and i.placement_start <= today_iso <= i.placement_end %}
@@ -65,6 +66,7 @@
           {% else %}
           <button type="button" class="btn-primary" style="flex: 1;" disabled>Сбор закрыт</button>
           {% endif %}
+          <a class="btn-secondary btn-link" href="{{ url_for('issue_page', issue_id=i.id) }}" title="Доходность, сравнение с ОФЗ и вкладами, график выплат, калькулятор">Аналитика</a>
           <a class="btn-secondary btn-link" href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank"
              title="Решение о выпуске (PDF), SHA-256 {{ i.doc_hash }}">РоВ</a>
         </div>
@@ -79,4 +81,5 @@
     </div>
   </section>
 </main>
+<script type="application/json" id="cfa-data">{{ cfa_data|tojson }}</script>
 {% endblock %}

@@ -35,6 +35,7 @@
 <div class="status-banner status-banner--red"><b>Замечания администратора:</b> {{ issue.reject_reason }}</div>
 {% endif %}
 
+<div class="rov-layout">
 <form id="form-rov" class="rov-form" data-issue-id="{{ issue.id if issue else '' }}" novalidate>
   <section class="rov-section">
     <h3><span>1</span> Сведения об эмитенте</h3>
@@ -164,4 +165,10 @@
     <button type="submit" class="btn-primary">Подписать и отправить на проверку</button>
   </div>
 </form>
+<aside class="rov-dash" aria-label="Живой дашборд выпуска">
+  <div class="rov-dash__head"><b>Как выпуск увидят инвесторы</b><span class="live-dot">обновляется на лету</span></div>
+  <div id="rov-dash"></div>
+</aside>
+</div>
+<script type="application/json" id="rov-bench">{{ {'bench': bench, 'track': track}|tojson }}</script>
 {% endblock %}

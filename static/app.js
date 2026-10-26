@@ -623,3 +623,39 @@ if (registerForm) {
     } finally { btn.disabled = false; }
   });
 }
+
+// ======================================================================
+// ДАШБОРДЫ ВЫПУСКОВ (расчёты — analytics.js, отрисовка — dashboards.js)
+// ======================================================================
+(function () {
+  if (!window.CFADash) return;
+  function json(id) { var el = document.getElementById(id); return el ? JSON.parse(el.textContent) : null; }
+  var market = json('cfa-data');
+  if (market) CFADash.cards(market);                                   // карточки витрины
+  var page = json('issue-data');
+  if (page) CFADash.issuePage(document.querySelector('.issue-page'), page.issue, page.bench);   // страница выпуска
+  var ctor = json('rov-bench');
+  if (ctor && rovForm) CFADash.constructor(rovForm, $('#rov-dash'), ctor.bench, ctor.track);   // живой конструктор
+  var adm = json('admin-issue-data');
+  if (adm) CFADash.compact($('#admin-dash'), adm.issue, adm.bench, 'investor');               // модерация
+})();
+
+// ---------- Рыночные ориентиры (админ) ----------
+var benchForm = $('#form-benchmarks');
+if (benchForm) {
+  async function saveBench(body) {
+    showError('bench-error', '');
+    benchForm.querySelectorAll('.is-invalid').forEach(function (x) { x.classList.remove('is-invalid'); });
+    benchForm.querySelectorAll('.field-error').forEach(function (x) { x.remove(); });
+    try { await api('/api/admin/benchmarks', body); reloadSoon('Ориентиры сохранены — оценки выпусков пересчитаны'); }
+    catch (err) {
+      if (err.message === 'auth') return;
+      Object.keys(err.errors || {}).forEach(function (n) { var i = benchForm.querySelector('[name="' + n + '"]'); if (i) markLight(i, err.errors[n]); });
+      showError('bench-error', err.message);
+    }
+  }
+  benchForm.addEventListener('submit', function (e) { e.preventDefault(); saveBench(Object.fromEntries(new FormData(benchForm).entries())); });
+  $('#bench-reset').addEventListener('click', function () {
+    if (confirm('Вернуть значения по умолчанию (ЦБ, Росстат, MOEX на октябрь 2026)?')) saveBench({ reset: true });
+  });
+}

@@ -7,6 +7,7 @@ common.py — общее для main.py и admin.py: соединение с Б�
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from functools import wraps
 
@@ -164,6 +165,7 @@ ADMIN_ACTIONS = {
     "USER_BLOCK": "Участник заблокирован",
     "ISSUE_APPROVE": "Выпуск одобрен и опубликован",
     "ISSUE_REJECT": "Выпуск возвращён на доработку",
+    "BENCHMARKS_UPDATE": "Обновлены рыночные ориентиры",
 }
 CHAIN_METHODS = {
     "deploy": "Развёртывание контракта",
@@ -258,3 +260,68 @@ def reconciliation(conn: sqlite3.Connection) -> list[dict]:
                 rows.append({"who": f"Выпуск #{i['id']} · {h['full_name']}", "what": "ЦФА на счёте владельца",
                              "db": fmt(h["qty"]), "chain": fmt(bal), "match": bal == h["qty"]})
     return rows
+
+
+# ------------------------------------------------------------------------------
+# Рыночные ориентиры для аналитики выпусков (админ меняет их в /admin/benchmarks)
+# ------------------------------------------------------------------------------
+DEFAULT_BENCHMARKS = {
+    "as_of": "2026-10-23",
+    "key_rate": 14.0,         # ключевая ставка ЦБ — решение Совета директоров 23.10.2026
+    "deposit_rate": 13.06,    # средняя максимальная ставка по вкладам ТОП-10 банков, II декада октября 2026
+    "inflation": 6.35,        # годовая инфляция, сентябрь 2026 (Росстат)
+    "ndfl": 13.0,             # НДФЛ с купонного дохода (базовая ставка)
+    # Доходность ОФЗ-ПД по срокам, лет → % (MOEX ISS, 15.10.2026)
+    "ofz_curve": [[1, 13.27], [1.3, 14.03], [2.4, 14.84], [2.9, 14.99], [3.9, 15.65], [5, 15.68], [10, 16.22]],
+    "sources": "Банк России — ключевая ставка (23.10.2026) и средняя максимальная ставка по вкладам (II декада "
+               "октября 2026); Росстат — годовая инфляция (сентябрь 2026); MOEX ISS — доходности ОФЗ-ПД (15.10.2026)",
+}
+
+
+def get_benchmarks(conn) -> dict:
+    row = conn.execute("SELECT value FROM platform_settings WHERE key = 'benchmarks'").fetchone()
+    data = dict(DEFAULT_BENCHMARKS)
+    if row:
+        data.update(json.loads(row["value"]))
+    return data
+
+
+def save_benchmarks(conn, admin_id: int, data: dict) -> None:
+    import database_setup as db_
+    with conn:
+        conn.execute(
+            """INSERT INTO platform_settings (key, value, updated_by, updated_at) VALUES ('benchmarks', ?, ?, datetime('now', 'localtime'))
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by,
+                                              updated_at = excluded.updated_at""",
+            (json.dumps(data, ensure_ascii=False), admin_id))
+        db_.log_admin_action(conn, admin_id, "BENCHMARKS_UPDATE", "settings", 0,
+                             f"ключевая {data['key_rate']} %, вклады {data['deposit_rate']} %, инфляция {data['inflation']} %, "
+                             f"на {data['as_of']}")
+
+
+def issuer_track(conn, issuer_id: int, exclude_issue: int | None = None) -> dict:
+    """История эмитента на платформе: сколько выпусков состоялось и сколько отменено."""
+    rows = conn.execute("SELECT status, COUNT(*) AS n FROM cfa_issues WHERE issuer_id = ? AND id != ? GROUP BY status",
+                        (issuer_id, exclude_issue or 0)).fetchall()
+    by = {r["status"]: r["n"] for r in rows}
+    return {"issued": by.get("ISSUED", 0) + by.get("REDEEMED", 0), "cancelled": by.get("CANCELLED", 0)}
+
+
+def issue_payload(conn, issue) -> dict:
+    """Параметры выпуска для analytics.js (в том же виде, что собирает конструктор)."""
+    rov = json.loads(issue["rov_json"] or "{}")
+    stats = conn.execute(
+        """SELECT COUNT(DISTINCT user_id) AS investors, COUNT(*) AS orders, COALESCE(AVG(total_rub), 0) AS avg_order
+           FROM orders WHERE issue_id = ? AND status != 'REFUNDED'""", (issue["id"],)).fetchone()
+    track = issuer_track(conn, issue["issuer_id"], exclude_issue=issue["id"])
+    return {
+        "id": issue["id"], "title": issue["title"], "status": issue["status"],
+        "price": issue["price_per_cfa"], "rate": issue["coupon_rate"], "period": rov.get("coupon_period", "maturity"),
+        "placementStart": issue["placement_start"], "placementEnd": issue["placement_end"], "maturity": issue["maturity_date"],
+        "collateral": rov.get("collateral") == "yes", "buyback": rov.get("buyback") == "yes",
+        "minQty": issue["min_qty"], "maxQty": issue["max_qty"], "minOrder": issue["min_order_qty"],
+        "maxOrder": issue["max_order_qty"], "collected": issue["collected_qty"],
+        "showDemand": issue["status"] in ("SUBSCRIPTION", "ISSUED", "CANCELLED"),
+        "issuerIssued": track["issued"], "issuerCancelled": track["cancelled"],
+        "investors": stats["investors"], "orders": stats["orders"], "avgOrder": round(stats["avg_order"]),
+    }

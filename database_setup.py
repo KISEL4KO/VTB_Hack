@@ -43,7 +43,7 @@ def calc_sha256(payload: str) -> str:
 
 
 # ==============================================================================
-# 2. СХЕМА: 7 ТАБЛИЦ ПЛАТФОРМЫ (+ 2 таблицы журнала блокчейна создаёт blockchain.py)
+# 2. СХЕМА: 8 ТАБЛИЦ ПЛАТФОРМЫ (+ 2 таблицы журнала блокчейна создаёт blockchain.py)
 # ==============================================================================
 SCHEMA_SQL = """
 -- 1. Участники: физлица (FL), юрлица (UL) и администраторы платформы (ADMIN)
@@ -173,6 +173,14 @@ CREATE TABLE IF NOT EXISTS admin_actions (
     comment           TEXT,
     evm_tx_hash       TEXT,
     created_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- 8. Настройки платформы (рыночные ориентиры для аналитики и т. п.), значение — JSON
+CREATE TABLE IF NOT EXISTS platform_settings (
+    key               TEXT PRIMARY KEY,
+    value             TEXT NOT NULL,
+    updated_by        INTEGER REFERENCES users(id),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 """
 

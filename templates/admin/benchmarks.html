@@ -1,0 +1,31 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Рыночные ориентиры</h2>
+    <p class="pane-desc">С ними сравнивается доходность каждого выпуска: премия к ОФЗ того же срока, к ключевой ставке и вкладам, реальная доходность после инфляции</p>
+  </div>
+</div>
+<div class="status-banner status-banner--amber">
+  Значения на <b>{{ b.as_of|ddmm }}</b>{% if updated %} · изменены {{ updated.updated_at|ddmm }}{% if updated.full_name %} ({{ updated.full_name }}){% endif %}{% else %} · значения по умолчанию{% endif %}.
+  Обновляйте их после заседаний Банка России и публикаций Росстата — от них зависят все оценки выгодности на витрине.
+</div>
+<form id="form-benchmarks" class="light-form-card" novalidate>
+  <div class="light-form-grid">
+    <div class="light-field"><label>Ключевая ставка ЦБ, % годовых</label><input name="key_rate" value="{{ b.key_rate }}" inputmode="decimal"></div>
+    <div class="light-field"><label>Средняя макс. ставка по вкладам, %</label><input name="deposit_rate" value="{{ b.deposit_rate }}" inputmode="decimal"></div>
+    <div class="light-field"><label>Годовая инфляция, %</label><input name="inflation" value="{{ b.inflation }}" inputmode="decimal"></div>
+    <div class="light-field"><label>НДФЛ с купонного дохода, %</label><input name="ndfl" value="{{ b.ndfl }}" inputmode="decimal"></div>
+    <div class="light-field"><label>Значения актуальны на</label><input type="date" name="as_of" value="{{ b.as_of }}"></div>
+    <div class="light-field light-field--full"><label>Кривая доходности ОФЗ: «срок, лет : доходность, %» — по строке на точку</label>
+      <textarea name="ofz_curve" rows="7" class="mono">{{ curve }}</textarea>
+      <small class="field-hint">Между точками доходность интерполируется линейно; срок выпуска сравнивается с ОФЗ того же срока.</small></div>
+    <div class="light-field light-field--full"><label>Источники</label><textarea name="sources" rows="2">{{ b.sources }}</textarea></div>
+  </div>
+  <div id="bench-error" class="form-error hidden"></div>
+  <div class="rov-actions">
+    <button type="button" class="btn-secondary" id="bench-reset">Вернуть значения по умолчанию</button>
+    <button type="submit" class="btn-primary">Сохранить</button>
+  </div>
+</form>
+{% endblock %}

@@ -39,6 +39,8 @@
   {% include "_modals.html" %}
   <div id="toast" class="toast hidden"></div>
   <script>window.ME = {{ ({'role': me.role, 'qualified': me.is_qualified, 'status': me.status} if me else None)|tojson }};</script>
+  <script src="{{ url_for('static', filename='analytics.js') }}"></script>
+  <script src="{{ url_for('static', filename='dashboards.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -23,8 +23,8 @@ import database_setup as db
 import kyc_checks
 import validators
 from common import REPORTS as reports
-from common import (ADMIN_ACTIONS, CHAIN_METHODS, admin_required, chain, current_user, get_db, json_error,
-                    pdf_required, reconciliation)
+from common import (ADMIN_ACTIONS, CHAIN_METHODS, DEFAULT_BENCHMARKS, admin_required, chain, current_user, get_benchmarks,
+                    get_db, issue_payload, json_error, pdf_required, reconciliation, save_benchmarks)
 
 bp = Blueprint("admin", __name__)
 
@@ -226,6 +226,7 @@ def issue_detail(issue_id):
         """SELECT a.*, adm.full_name AS admin_name FROM admin_actions a JOIN users adm ON adm.id = a.admin_id
            WHERE a.target_type = 'issue' AND a.target_id = ? ORDER BY a.id DESC""", (issue_id,)).fetchall()
     return render_template("admin/issue.html", section="issues", issue=issue, issuer=issuer, rov=rov,
+                           payload=issue_payload(conn, issue), bench=get_benchmarks(conn),
                            checks=_issue_checks(issue, issuer, rov), orders=orders, history=history,
                            action_names=ADMIN_ACTIONS, risk_names=[validators.ROV_RISKS.get(r, r) for r in rov.get('risks', [])],
                            investors_all=validators.ROV_INVESTORS, payments=validators.ROV_PAYMENT,
@@ -270,7 +271,8 @@ def audit():
     rows = get_db().execute(
         """SELECT a.*, adm.full_name AS admin_name,
                   CASE a.target_type WHEN 'user' THEN (SELECT full_name FROM users WHERE id = a.target_id)
-                                     ELSE (SELECT title FROM cfa_issues WHERE id = a.target_id) END AS target_name
+                                     WHEN 'issue' THEN (SELECT title FROM cfa_issues WHERE id = a.target_id)
+                                     ELSE 'Рыночные ориентиры' END AS target_name
            FROM admin_actions a JOIN users adm ON adm.id = a.admin_id ORDER BY a.id DESC""").fetchall()
     return render_template("admin/audit.html", section="audit", rows=rows, action_names=ADMIN_ACTIONS)
 
@@ -314,3 +316,73 @@ def audit_csv():
                     r["target_id"], r["comment"] or "", r["evm_tx_hash"] or ""])
     return Response("﻿" + out.getvalue(), mimetype="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=admin_audit.csv"})
+
+
+# ==============================================================================
+# Рыночные ориентиры для аналитики (ключевая ставка, вклады, инфляция, кривая ОФЗ)
+# ==============================================================================
+@bp.route("/admin/benchmarks")
+@admin_required
+def benchmarks():
+    conn = get_db()
+    b = get_benchmarks(conn)
+    row = conn.execute("""SELECT s.updated_at, u.full_name FROM platform_settings s LEFT JOIN users u ON u.id = s.updated_by
+                          WHERE s.key = 'benchmarks'""").fetchone()
+    curve = "\n".join(f"{str(t).replace('.', ',')} : {str(y).replace('.', ',')}" for t, y in b["ofz_curve"])
+    return render_template("admin/benchmarks.html", section="benchmarks", b=b, curve=curve, updated=row,
+                           defaults=DEFAULT_BENCHMARKS)
+
+
+def _num(d, key, label, lo, hi, errors):
+    raw = str(d.get(key, "")).strip().replace(",", ".").replace("%", "")
+    try:
+        v = float(raw)
+    except ValueError:
+        errors[key] = f"{label}: введите число, например 14 или 13,06."
+        return None
+    if not lo <= v <= hi:
+        errors[key] = f"{label}: от {lo} до {hi}."
+        return None
+    return round(v, 2)
+
+
+@bp.route("/api/admin/benchmarks", methods=["POST"])
+@admin_required
+def api_benchmarks():
+    from datetime import date as _date
+    d = request.get_json(silent=True) or {}
+    if d.get("reset"):
+        data = {k: v for k, v in DEFAULT_BENCHMARKS.items()}
+    else:
+        errors: dict = {}
+        data = {
+            "key_rate": _num(d, "key_rate", "Ключевая ставка", 0, 100, errors),
+            "deposit_rate": _num(d, "deposit_rate", "Ставка по вкладам", 0, 100, errors),
+            "inflation": _num(d, "inflation", "Инфляция", -20, 200, errors),
+            "ndfl": _num(d, "ndfl", "НДФЛ", 0, 50, errors),
+            "sources": str(d.get("sources", "")).strip()[:600] or "—",
+        }
+        try:
+            data["as_of"] = _date.fromisoformat(str(d.get("as_of", ""))).isoformat()
+        except ValueError:
+            errors["as_of"] = "Укажите дату, на которую актуальны значения."
+        curve = []
+        for n, line in enumerate(str(d.get("ofz_curve", "")).splitlines(), 1):
+            if not line.strip():
+                continue
+            parts = line.replace(",", ".").replace(";", ":").split(":")
+            try:
+                t, y = float(parts[0]), float(parts[1])
+                if not (0 < t <= 50 and 0 <= y <= 100):
+                    raise ValueError
+                curve.append([round(t, 2), round(y, 2)])
+            except (ValueError, IndexError):
+                errors["ofz_curve"] = f"Строка {n}: формат «срок в годах : доходность», например «2,4 : 14,84»."
+                break
+        if len(curve) < 2 and "ofz_curve" not in errors:
+            errors["ofz_curve"] = "Нужно хотя бы две точки кривой ОФЗ."
+        data["ofz_curve"] = sorted(curve)
+        if errors:
+            return json_error("Проверьте поля, выделенные красным.", 400, errors)
+    save_benchmarks(get_db(), current_user()["id"], data)
+    return jsonify({"status": "success"})
