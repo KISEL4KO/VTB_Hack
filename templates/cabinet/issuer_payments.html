@@ -4,8 +4,8 @@
 <div class="pane-header-row">
   <div>
     <h2 class="pane-title">Выплаты по выпуску «{{ issue.title }}»</h2>
-    <p class="pane-desc">Купоны по графику и погашение номинала. Деньги списываются с вашего кошелька и одной транзакцией
-      смарт-контракта зачисляются всем владельцам ЦФА.</p>
+    <p class="pane-desc">Купоны и погашение выплачивает сторож платформы автоматически в даты из графика: деньги списываются
+      с вашего кошелька и одной транзакцией смарт-контракта зачисляются всем владельцам ЦФА. Держите на кошельке нужную сумму к дате выплаты.</p>
   </div>
   <a class="btn-secondary btn-link" href="{{ url_for('cabinet_tab', tab='issuer') }}">← К выпускам</a>
 </div>
@@ -36,19 +36,25 @@
         <td>{{ ('%.2f' % c.per_cfa)|replace('.', ',') }} ₽</td>
         <td>{{ c.total|rub }}</td>
         <td>
-          {% if c.state == 'paid' %}<span class="badge badge--green">Выплачен {{ c.paid_at|ddmm }}{{ ' (досрочно)' if c.early }}</span>
+          {% if c.state == 'paid' %}<span class="badge badge--green">Выплачен {{ c.paid_at|ddmm }}</span>
             {% if c.evm_tx_hash %}<br><small class="mono" title="{{ c.evm_tx_hash }}">{{ c.evm_tx_hash|short_hash }}</small>{% endif %}
           {% elif c.state == 'overdue' %}<span class="badge badge--red">Просрочен</span>
           {% elif c.state == 'due' %}<span class="badge badge--amber">Сегодня</span>
+          {% elif c.state == 'cancelled' %}<span class="badge">Отменён (досрочное погашение)</span>
           {% else %}<span class="badge badge--blue">По графику</span>{% endif %}
         </td>
         <td>
           {% if c.is_next and issue.status == 'ISSUED' %}
-          {% set short = c.total - wallet.balance_rub %}
-          <button type="button" class="btn-primary" data-pay="coupon" data-issue="{{ issue.id }}"
-                  data-confirm="Выплатить купон № {{ c.no }}: {{ c.total|rub }} спишется с вашего кошелька и поступит {{ plan.holders }} владельцам{{ ' — раньше даты по графику' if c.end > today_iso }}. Продолжить?">
-            {{ 'Выплатить досрочно' if c.end > today_iso else 'Выплатить' }}</button>
-          {% if short > 0 %}<small class="pay-warn">Не хватает {{ short|rub }}</small>{% endif %}
+            {% set short = c.total - wallet.balance_rub %}
+            {% if c.state in ('due', 'overdue') %}
+            <button type="button" class="btn-primary" data-pay="coupon" data-issue="{{ issue.id }}"
+                    data-confirm="Выплатить купон № {{ c.no }} сейчас: {{ c.total|rub }} спишется с вашего кошелька и поступит {{ plan.holders }} владельцам. Продолжить?">
+              Выплатить сейчас</button>
+            <small class="pay-note">или сторож выплатит при следующей проверке</small>
+            {% else %}
+            <small class="pay-note">Сторож выплатит автоматически {{ c.end|ddmm }}</small>
+            {% endif %}
+            {% if short > 0 %}<small class="pay-warn">К дате нужно пополнить кошелёк на {{ short|rub }}</small>{% endif %}
           {% endif %}
         </td>
       </tr>
@@ -56,7 +62,8 @@
       <tr class="pay-redeem {{ 'is-next' if not red.block and issue.status == 'ISSUED' }}">
         <td>—</td>
         <td colspan="2"><b>Погашение номинала</b><br><small>дата погашения {{ red.date|ddmm }}
-          · досрочное погашение {{ 'допускается' if plan.early_allowed else 'не предусмотрено' }}</small></td>
+          · досрочное погашение {{ 'допускается' if plan.early_allowed else 'не предусмотрено' }}
+          {% if red.early and not red.block %}<br>досрочно: номинал + купон за {{ red.accrued_days }} дн. текущего периода, остальные купоны отменяются{% endif %}</small></td>
         <td>{{ issue.price_per_cfa|rub }}</td>
         <td>{{ red.total|rub }}</td>
         <td>
@@ -70,8 +77,8 @@
             {% else %}
             {% set short = red.total - wallet.balance_rub %}
             <button type="button" class="btn-primary" data-pay="redeem" data-issue="{{ issue.id }}"
-                    data-confirm="Погасить выпуск{{ ' досрочно' if red.early }}: {{ red.total|rub }} спишется с вашего кошелька, владельцы получат номинал, ЦФА будут списаны. Продолжить?">
-              {{ 'Погасить досрочно' if red.early else 'Погасить' }}</button>
+                    data-confirm="Погасить выпуск{{ ' досрочно' if red.early }}: {{ red.total|rub }} спишется с вашего кошелька, владельцы получат номинал{{ ' и купон за ' ~ red.accrued_days ~ ' дн.' if red.early }}, ЦФА будут списаны{{ ', оставшиеся купоны отменятся' if red.early }}. Продолжить?">
+              {{ 'Погасить досрочно' if red.early else 'Погасить сейчас' }}</button>
             {% if short > 0 %}<small class="pay-warn">Не хватает {{ short|rub }}</small>{% endif %}
             {% endif %}
           {% endif %}
@@ -85,12 +92,13 @@
 <div class="light-form-card pay-rules">
   <b>Как это работает</b>
   <ul>
-    <li>Купоны выплачиваются по порядку. Сумма каждому владельцу: количество ЦФА × номинал × ставка × дни периода / 365,
-      округление вниз до рубля — так же считает смарт-контракт (<code>payCoupon</code>).</li>
-    <li>Если на кошельке не хватает денег, выплата не проходит целиком: никто не получит часть суммы. Просроченная выплата
-      подсвечивается красным у вас и у инвесторов.</li>
-    <li>Погашение (<code>redeem</code>) возможно после выплаты всех купонов и в дату погашения. Раньше — только если
-      Решение о выпуске допускает досрочное погашение (раздел 12).</li>
+    <li>График записан в смарт-контракт при размещении. В дату выплаты сторож платформы отправляет транзакцию
+      <code>payCoupon</code>, а контракт проверяет: дата наступила, купоны идут по порядку, у вас хватает денег.</li>
+    <li>Сумма каждому владельцу: количество ЦФА × номинал × ставка × дни периода / 365, вниз до рубля.</li>
+    <li>Не хватает денег — выплата не проходит целиком, становится просроченной, а в вашей истории операций появляется
+      напоминание. Пополните кошелёк — сторож выплатит при следующей проверке (или нажмите «Выплатить сейчас»).</li>
+    <li>Погашение (<code>redeem</code>) сторож выполняет в дату погашения после последнего купона. Досрочно погасить можно
+      только если это разрешено Решением о выпуске (раздел 12): владельцы получат номинал и купон, накопленный в текущем периоде.</li>
   </ul>
 </div>
 {% endblock %}

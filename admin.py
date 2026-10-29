@@ -17,7 +17,7 @@ import csv
 import io
 import json
 
-from flask import Blueprint, Response, abort, jsonify, render_template, request
+from flask import Blueprint, Response, abort, current_app, jsonify, render_template, request
 
 import database_setup as db
 import kyc_checks
@@ -260,6 +260,31 @@ def blockchain_page():
     rows = reconciliation(conn)
     return render_template("admin/blockchain.html", section="blockchain", status=ch.status() if ch else {},
                            txs=txs, methods=CHAIN_METHODS, rec=rows, rec_bad=sum(not r["match"] for r in rows))
+
+
+# ==============================================================================
+# Сторож выплат (keeper): что пора выплатить, что уже сделано, ручной запуск
+# ==============================================================================
+@bp.route("/admin/keeper")
+@admin_required
+def keeper_page():
+    import keeper
+    conn = get_db()
+    events = conn.execute(
+        """SELECT k.*, i.title FROM keeper_events k LEFT JOIN cfa_issues i ON i.id = k.issue_id
+           ORDER BY k.id DESC LIMIT 50""").fetchall()
+    actions = sorted(keeper.due_actions(conn), key=lambda a: (not a["due"], a["date"]))
+    return render_template("admin/keeper.html", section="keeper", actions=actions, events=events, last=keeper.LAST_RUN,
+                           interval=current_app.config.get("KEEPER_INTERVAL", 0),
+                           req_interval=current_app.config.get("KEEPER_REQUEST_INTERVAL", 0))
+
+
+@bp.route("/api/admin/keeper/run", methods=["POST"])
+@admin_required
+def api_keeper_run():
+    import keeper
+    events = keeper.run_once(chain(), "admin")
+    return jsonify({"status": "success", "events": events})
 
 
 # ==============================================================================

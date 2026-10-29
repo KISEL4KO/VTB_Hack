@@ -24,6 +24,7 @@ from flask import Flask, Response, abort, jsonify, redirect, render_template, re
 from werkzeug.security import check_password_hash, generate_password_hash  # werkzeug ставится вместе с Flask
 
 import database_setup as db
+import keeper
 import validators
 from blockchain import ISSUE_STATUS as CHAIN_ISSUE_STATUS
 from common import REPORTS as reports
@@ -68,6 +69,19 @@ else:
     print(f"Блокчейн выключен: {CHAIN.reason}")
 if PDF_ERROR:
     print(PDF_ERROR)
+
+# «Сторож» выплат: при обычных запросах — не чаще раза в KEEPER_REQUEST_INTERVAL секунд.
+# Нужен хостингам без фоновых потоков и расписаний (бесплатный PythonAnywhere). 0 — выключить.
+KEEPER_REQUEST_INTERVAL = float(os.environ.get("KEEPER_REQUEST_INTERVAL", "300"))
+KEEPER_INTERVAL = float(os.environ.get("KEEPER_INTERVAL", "60"))   # фоновый поток при запуске python main.py
+app.config.update(KEEPER_INTERVAL=KEEPER_INTERVAL, KEEPER_REQUEST_INTERVAL=KEEPER_REQUEST_INTERVAL)
+
+
+@app.before_request
+def keeper_on_request():
+    if request.endpoint != "static":
+        keeper.maybe_run_on_request(chain(), KEEPER_REQUEST_INTERVAL)
+
 
 import admin  # noqa: E402  (регистрируем админ-панель после создания app)
 
@@ -594,7 +608,7 @@ def api_finalize(issue_id):
 @app.route("/api/issues/<int:issue_id>/coupon", methods=["POST"])
 @api_approved_required
 def api_pay_coupon(issue_id):
-    """Эмитент выплачивает очередной купон владельцам ЦФА со своего кошелька."""
+    """Эмитент выплачивает наступивший купон сам (например, сразу после пополнения кошелька), не дожидаясь сторожа."""
     try:
         return jsonify({**db.pay_coupon(get_db(), issue_id, session["user_id"], chain=chain()), "status": "success"})
     except ValueError as e:
@@ -604,7 +618,7 @@ def api_pay_coupon(issue_id):
 @app.route("/api/issues/<int:issue_id>/redeem", methods=["POST"])
 @api_approved_required
 def api_redeem(issue_id):
-    """Эмитент погашает выпуск: номинал владельцам со своего кошелька, ЦФА списываются."""
+    """Эмитент погашает выпуск: в дату погашения или досрочно, если это разрешено Решением о выпуске."""
     try:
         return jsonify({**db.redeem_issue(get_db(), issue_id, session["user_id"], chain=chain()), "status": "success"})
     except ValueError as e:
@@ -696,5 +710,31 @@ def seed_demo_cmd():
     click.echo(demo_data.SUMMARY)
 
 
+@app.cli.command("keeper")
+@click.option("--loop", "loop", type=float, default=0, help="Повторять каждые N секунд (0 — один проход).")
+def keeper_cmd(loop):
+    """Сторож выплат: выплатить наступившие купоны и погашения (для cron / планировщика задач)."""
+    import time
+    while True:
+        events = keeper.run_once(chain(), "cli")
+        stamp = date.today().strftime("%d.%m.%Y")
+        for e in events:
+            click.echo(f"[{stamp}] {e['result']}: {e['message']}")
+        if not events:
+            nearest = [a for a in keeper.due_actions(db.get_connection()) if not a["due"]]
+            hint = min(nearest, key=lambda a: a["date"]) if nearest else None
+            click.echo(f"[{stamp}] Нечего исполнять." + (
+                f" Ближайшее: {hint['what']} по «{hint['issue']['title']}» — {hint['date'][8:10]}.{hint['date'][5:7]}."
+                f"{hint['date'][:4]}" if hint else ""))
+        if loop <= 0:
+            break
+        time.sleep(loop)
+
+
 if __name__ == "__main__":
+    # Фоновый поток сторожа. В режиме отладки Flask запускает два процесса (наблюдатель за файлами и сервер) —
+    # поток нужен только в процессе сервера (WERKZEUG_RUN_MAIN=true).
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        keeper.start_thread(chain(), KEEPER_INTERVAL)
+        print(f"Сторож выплат: проверка каждые {KEEPER_INTERVAL:g} с")
     app.run(debug=True)

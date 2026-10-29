@@ -31,6 +31,7 @@ import json
 import os
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -90,6 +91,8 @@ class Chain:
         self.address = None
         self.replayed = 0
         self._lock = threading.RLock()   # EVM и nonce оператора — общий ресурс для всех потоков Flask
+        self._connect = connect
+        self._synced_at = 0.0
 
         try:
             from web3 import Web3
@@ -144,16 +147,29 @@ class Chain:
     def _resync(self, conn: sqlite3.Connection) -> None:
         """
         Самовосстановление встроенной сети. Все транзакции отправляет оператор, поэтому его nonce
-        обязан равняться числу записей в журнале. Если транзакция SQLite откатилась уже после
-        исполнения в EVM, счётчики разойдутся — тогда пересобираем EVM из журнала.
+        обязан равняться числу записей в журнале.
+          • В журнале больше записей — их добавил другой процесс (например, «сторож», запущенный
+            командой по расписанию): догоняем, воспроизводя только недостающий хвост.
+          • В журнале меньше — транзакция SQLite откатилась уже после исполнения в EVM:
+            пересобираем EVM из журнала целиком.
         """
         if self.mode != "embedded":
             return
         journal = conn.execute("SELECT COUNT(*) FROM evm_transactions").fetchone()[0]
-        if self.w3.eth.get_transaction_count(self.account.address) != journal:
+        nonce = self.w3.eth.get_transaction_count(self.account.address)
+        if journal > nonce:
+            rows = conn.execute("SELECT raw_tx, tx_hash FROM evm_transactions ORDER BY seq LIMIT -1 OFFSET ?",
+                                (nonce,)).fetchall()
+            for row in rows:
+                h = self.w3.eth.send_raw_transaction(bytes(row["raw_tx"]))
+                if self.w3.eth.wait_for_transaction_receipt(h).status != 1 or h.to_0x_hex() != row["tx_hash"]:
+                    journal = -1   # хвост не сходится — пересобираем целиком
+                    break
+        if journal != self.w3.eth.get_transaction_count(self.account.address):
             self._new_embedded()
             self._replay(conn)
             self.contract = self.w3.eth.contract(address=self.address, abi=self.abi)
+        self._synced_at = time.monotonic()
 
     def _replay(self, conn: sqlite3.Connection) -> None:
         """Воспроизводит журнал транзакций во встроенной EVM (детерминированно)."""
@@ -232,10 +248,17 @@ class Chain:
             return receipt.transactionHash.to_0x_hex()
 
     def call(self, method: str, *args) -> Any:
-        """Чтение состояния контракта (без транзакции)."""
+        """Чтение состояния контракта (без транзакции). Раз в секунду сверяемся с журналом — вдруг
+        транзакции добавил другой процесс («сторож»)."""
         if not self.enabled:
             return None
         with self._lock:
+            if self.mode == "embedded" and time.monotonic() - self._synced_at > 1.0:
+                conn = self._connect()
+                try:
+                    self._resync(conn)
+                finally:
+                    conn.close()
             return getattr(self.contract.functions, method)(*args).call()
 
     def address_of(self, evm_address: str) -> str:

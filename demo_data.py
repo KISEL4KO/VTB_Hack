@@ -27,7 +27,7 @@ SUMMARY = f"""
   Роль                          Логин            Статус
   ----------------------------  ---------------  ---------------------------------------
   Администратор                 admin            пароль: {ADMIN_PASSWORD}
-  Эмитент (ЮЛ)                  demo_issuer      допущен, 3 выпуска + 1 на модерации; по выпуску 01 выплачен купон
+  Эмитент (ЮЛ)                  demo_issuer      допущен, 3 выпуска + 1 на модерации
   Инвестор-физлицо              demo_investor    допущен, есть ЦФА и заявки
   Инвестор-юрлицо               demo_fund        допущен, есть ЦФА
   Эмитент и инвестор (ИП)       demo_ip          допущен, свой выпуск со сбором заявок + ЦФА в заявке
@@ -148,7 +148,6 @@ def seed(conn, chain) -> None:
     db.buy_cfa_on_showcase(conn, investor, i1, 150, "1234", chain)
     db.buy_cfa_on_showcase(conn, fund, i1, 300, "UKEP", chain)
     db.finalize_issue_dvp(conn, i1, chain)
-    db.pay_coupon(conn, i1, issuer, chain)                         # первый купон — досрочно, с кошелька эмитента
 
     # Выпуск 2: отменён — минимум не набран, деньги и лимит вернулись
     i2 = db.save_issue_decision(conn, issuer, _rov("ЦФА Демо-Лизинг 00", 1000, 500, 2000, 16))["issue_id"]

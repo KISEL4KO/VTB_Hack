@@ -1,0 +1,67 @@
+{% extends "admin/_layout.html" %}
+{% block pane %}
+<div class="pane-header-row">
+  <div>
+    <h2 class="pane-title">Сторож выплат</h2>
+    <p class="pane-desc">Смарт-контракт не запускается сам — по датам из графика выплаты отправляет «сторож» платформы.
+      Дату, порядок и наличие денег у эмитента проверяет контракт.</p>
+  </div>
+  <button type="button" class="btn-primary" id="keeper-run">Проверить сейчас</button>
+</div>
+
+<div class="pay-summary">
+  <div class="kpi"><span>Последний проход</span><b>{{ last.at|ddmm if last.at else '—' }}</b>
+    <small>{{ {'thread': 'фоновый поток', 'request': 'при запросе к сайту', 'cli': 'команда flask keeper', 'admin': 'кнопка в админке'}.get(last.source, 'после запуска сервера ещё не было') }}</small></div>
+  <div class="kpi"><span>Фоновый поток</span><b>{{ 'каждые %g с'|format(interval) if interval else 'выключен' }}</b>
+    <small>при запуске <code>python main.py</code></small></div>
+  <div class="kpi"><span>При запросах к сайту</span><b>{{ 'раз в %g с'|format(req_interval) if req_interval else 'выключено' }}</b>
+    <small>для хостингов без фоновых задач</small></div>
+  <div class="kpi"><span>Пора выполнить</span><b>{{ actions|selectattr('due')|list|length }}</b>
+    <small>из {{ actions|length }} выпусков в обращении</small></div>
+</div>
+
+<div id="keeper-result" class="status-banner hidden"></div>
+
+<h3 class="block-title">Ближайшие выплаты</h3>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Выпуск</th><th>Что</th><th>Дата</th><th>Сумма</th><th>Деньги эмитента</th><th>Статус</th></tr></thead>
+    <tbody>
+      {% for a in actions %}
+      <tr>
+        <td><a href="{{ url_for('admin.issue_detail', issue_id=a.issue.id) }}">{{ a.issue.title }}</a></td>
+        <td>{{ a.what }}</td><td class="nowrap">{{ a.date|ddmm }}</td><td class="nowrap">{{ a.amount|rub }}</td>
+        <td>{% if a.funds_ok %}<span class="badge badge--green">хватает</span>{% else %}<span class="badge badge--red">не хватает</span>{% endif %}</td>
+        <td>{% if a.overdue %}<span class="badge badge--red">Просрочено</span>
+            {% elif a.due %}<span class="badge badge--amber">Пора выплатить</span>
+            {% else %}<span class="badge badge--blue">Ждёт даты</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">Нет выпусков в обращении</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h3 class="block-title">Журнал сторожа</h3>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Время</th><th>Результат</th><th>Событие</th><th>Запуск</th><th>Транзакция</th></tr></thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td class="nowrap">{{ e.created_at|ddmm }}</td>
+        <td>{% if e.result == 'OK' %}<span class="badge badge--green">выплачено</span>
+            {% elif e.result == 'NO_FUNDS' %}<span class="badge badge--red">нет средств</span>
+            {% else %}<span class="badge badge--amber">ошибка</span>{% endif %}</td>
+        <td>{{ e.message }}</td>
+        <td>{{ {'thread': 'поток', 'request': 'запрос', 'cli': 'команда', 'admin': 'админ'}.get(e.source, e.source) }}</td>
+        <td><span class="mono" title="{{ e.evm_tx_hash or '' }}">{{ e.evm_tx_hash|short_hash if e.evm_tx_hash else '—' }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-cell">Пока ни одной выплаты не наступило — сторож ждёт дат по графику</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

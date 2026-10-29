@@ -729,3 +729,24 @@ if (benchForm) {
   });
 }
 
+
+// ---------- Админка: «Сторож выплат» — ручной проход ----------
+(function () {
+  var btn = $('#keeper-run');
+  if (!btn) return;
+  btn.addEventListener('click', async function () {
+    var box = $('#keeper-result');
+    btn.disabled = true;
+    try {
+      var r = await api('/api/admin/keeper/run');
+      box.className = 'status-banner ' + (r.events.length ? 'status-banner--green' : 'status-banner--amber');
+      box.textContent = r.events.length
+        ? r.events.map(function (e) { return e.message; }).join(' · ')
+        : 'Нечего исполнять: ни одна дата выплаты ещё не наступила (или по ней уже записано «нет средств» сегодня).';
+      if (r.events.length) setTimeout(function () { location.reload(); }, 1500);
+    } catch (err) {
+      box.className = 'status-banner status-banner--red';
+      box.textContent = err.message;
+    } finally { btn.disabled = false; }
+  });
+})();

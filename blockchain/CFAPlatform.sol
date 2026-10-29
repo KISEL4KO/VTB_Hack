@@ -15,8 +15,8 @@ pragma solidity ^0.8.24;
  * Жизненный цикл выпуска: registerIssue → subscribe (деньги в холд) → finalize:
  *  • собран минимум → ЦФА инвесторам, рубли эмитенту (DvP);
  *  • не собран      → рубли возвращаются инвесторам.
- * После размещения: payCoupon (купоны по графику, по порядку) → redeem (погашение номинала).
- * Деньги на выплаты списываются с кошелька эмитента; если их не хватает — выплата не происходит.
+ * После размещения: setSchedule (график в контракте) → payCoupon в даты выплат → redeem в дату погашения.
+ * Транзакции отправляет «сторож» оператора; дату, порядок и наличие денег эмитента проверяет контракт.
  */
 contract CFAPlatform {
     // ---------------------------------------------------------------- состояние
@@ -177,44 +177,112 @@ contract CFAPlatform {
     }
 
     // ---------------------------------------------------------------- выплаты владельцам
-    /// Купон за период: каждому владельцу qty × цена × ставка × дни / 365, с кошелька эмитента.
-    /// rateBp — ставка в сотых долях процента (18,5 % → 1850). Целочисленное деление — вниз до рубля.
-    function couponOf(uint256 issueId, address holder, uint256 rateBp, uint256 periodDays) public view returns (uint256) {
-        return balanceOf[issueId][holder] * issues[issueId].price * rateBp * periodDays / 3650000;
+    // График купонов записывается в контракт при размещении (setSchedule). Дальше контракт сам решает,
+    // можно ли платить: дата выплаты наступила (block.timestamp), выплаты идут по порядку,
+    // у эмитента хватает цифровых рублей. Транзакцию отправляет «сторож» оператора (keeper) —
+    // сам контракт проснуться не может, — но правила проверяет только контракт.
+    uint256 private constant DAY = 1 days;
+
+    mapping(uint256 => uint64[]) private _couponDates;     // даты выплат (unix, 00:00 МСК), последняя = погашение
+    mapping(uint256 => uint32[]) private _couponDays;      // длина каждого купонного периода, дней
+    mapping(uint256 => uint64) public accrualStart;        // начало начисления купона (дата DvP)
+    mapping(uint256 => uint32) public couponRateBp;        // ставка в сотых долях процента: 18,5 % = 1850
+    mapping(uint256 => bool) public earlyRedemptionAllowed;
+
+    event ScheduleSet(uint256 indexed issueId, uint256 periods, uint64 maturity);
+
+    function setSchedule(uint256 issueId, uint64 start, uint32 rateBp, uint64[] calldata dates,
+                         uint32[] calldata dayCounts, bool earlyRedemption) external onlyOperator {
+        require(issues[issueId].status == Status.Issued, unicode"Выпуск не размещён");
+        require(_couponDates[issueId].length == 0, unicode"График уже записан");
+        require(dates.length > 0 && dates.length == dayCounts.length, unicode"Некорректный график выплат");
+        uint64 prev = start;
+        for (uint256 i = 0; i < dates.length; i++) {
+            require(dates[i] > prev, unicode"Даты выплат должны возрастать");
+            prev = dates[i];
+        }
+        accrualStart[issueId] = start;
+        couponRateBp[issueId] = rateBp;
+        earlyRedemptionAllowed[issueId] = earlyRedemption;
+        _couponDates[issueId] = dates;
+        _couponDays[issueId] = dayCounts;
+        emit ScheduleSet(issueId, dates.length, dates[dates.length - 1]);
     }
 
-    function payCoupon(uint256 issueId, uint256 period, uint256 rateBp, uint256 periodDays)
-        external onlyOperator returns (uint256 total)
-    {
+    function scheduleOf(uint256 issueId) external view returns (uint64[] memory, uint32[] memory) {
+        return (_couponDates[issueId], _couponDays[issueId]);
+    }
+
+    function maturityOf(uint256 issueId) public view returns (uint64) {
+        uint64[] storage d = _couponDates[issueId];
+        return d.length == 0 ? 0 : d[d.length - 1];
+    }
+
+    /// Купон владельца за период: qty × цена × ставка × дни / 365, целые рубли вниз.
+    function couponOf(uint256 issueId, address holder, uint256 periodDays) public view returns (uint256) {
+        return balanceOf[issueId][holder] * issues[issueId].price * couponRateBp[issueId] * periodDays / 3650000;
+    }
+
+    /// Что «сторожу» пора сделать по выпуску: 0 — ничего, 1 — купон, 2 — погашение. Деньги эмитента не проверяет.
+    function dueAction(uint256 issueId) public view returns (uint8) {
+        if (issues[issueId].status != Status.Issued) return 0;
+        uint64[] storage d = _couponDates[issueId];
+        if (d.length == 0) return 0;
+        uint256 paid = couponsPaid[issueId];
+        if (paid < d.length) return block.timestamp >= d[paid] ? 1 : 0;
+        return block.timestamp >= d[d.length - 1] ? 2 : 0;
+    }
+
+    /// Очередной купон — только когда наступила его дата; с кошелька эмитента всем владельцам.
+    function payCoupon(uint256 issueId) external onlyOperator returns (uint256 total) {
         Issue storage s = issues[issueId];
         require(s.status == Status.Issued, unicode"Выпуск не размещён или уже погашен");
-        require(period == couponsPaid[issueId] + 1, unicode"Купоны выплачиваются по порядку");
+        uint64[] storage d = _couponDates[issueId];
+        uint256 period = couponsPaid[issueId] + 1;
+        require(d.length > 0, unicode"График выплат не записан");
+        require(period <= d.length, unicode"Все купоны выплачены");
+        require(block.timestamp >= d[period - 1], unicode"Дата выплаты купона ещё не наступила");
+        uint256 days_ = _couponDays[issueId][period - 1];
         address[] storage list = _investors[issueId];
-        for (uint256 i = 0; i < list.length; i++) {
-            total += couponOf(issueId, list[i], rateBp, periodDays);
-        }
+        for (uint256 i = 0; i < list.length; i++) total += couponOf(issueId, list[i], days_);
         require(rubBalance[s.issuer] >= total, unicode"Недостаточно средств эмитента для выплаты купона");
         rubBalance[s.issuer] -= total;
-        for (uint256 i = 0; i < list.length; i++) {
-            rubBalance[list[i]] += couponOf(issueId, list[i], rateBp, periodDays);
-        }
+        for (uint256 i = 0; i < list.length; i++) rubBalance[list[i]] += couponOf(issueId, list[i], days_);
         couponsPaid[issueId] = period;
         emit CouponPaid(issueId, period, total);
     }
 
-    /// Погашение: каждому владельцу qty × номинал с кошелька эмитента, ЦФА списываются (сжигаются).
-    function redeem(uint256 issueId) external onlyOperator returns (uint256 total) {
+    /// Погашение: в дату погашения после всех купонов. Досрочно — только если разрешено Решением о выпуске:
+    /// тогда владельцы получают номинал + купон, накопленный за accruedDays текущего периода, остальные купоны отменяются.
+    function redeem(uint256 issueId, uint256 accruedDays) external onlyOperator returns (uint256 total) {
         Issue storage s = issues[issueId];
         require(s.status == Status.Issued, unicode"Выпуск не размещён или уже погашен");
-        total = totalSupply[issueId] * s.price;
-        require(rubBalance[s.issuer] >= total, unicode"Недостаточно средств эмитента для погашения");
-        rubBalance[s.issuer] -= total;
+        uint64[] storage d = _couponDates[issueId];
+        require(d.length > 0, unicode"График выплат не записан");
+        uint256 paid = couponsPaid[issueId];
+        if (block.timestamp >= d[d.length - 1]) {
+            require(paid == d.length, unicode"Сначала выплачиваются все купоны");
+            require(accruedDays == 0, unicode"В дату погашения купон выплачивается отдельно");
+        } else {
+            require(earlyRedemptionAllowed[issueId], unicode"Досрочное погашение не предусмотрено Решением о выпуске");
+            require(paid < d.length, unicode"Все купоны уже выплачены");
+            uint64 periodStart = paid == 0 ? accrualStart[issueId] : d[paid - 1];
+            require(block.timestamp < d[paid], unicode"Сначала выплачивается наступивший купон");
+            require(uint256(periodStart) + accruedDays * DAY <= block.timestamp, unicode"Накопленный купон больше прошедших дней");
+        }
         address[] storage list = _investors[issueId];
         for (uint256 i = 0; i < list.length; i++) {
-            uint256 qty = balanceOf[issueId][list[i]];
+            total += balanceOf[issueId][list[i]] * s.price + couponOf(issueId, list[i], accruedDays);
+        }
+        require(rubBalance[s.issuer] >= total, unicode"Недостаточно средств эмитента для погашения");
+        rubBalance[s.issuer] -= total;
+        for (uint256 i = 0; i < list.length; i++) {
+            address h = list[i];
+            uint256 qty = balanceOf[issueId][h];
             if (qty == 0) continue;
-            balanceOf[issueId][list[i]] = 0;
-            rubBalance[list[i]] += qty * s.price;
+            uint256 amount = qty * s.price + couponOf(issueId, h, accruedDays);
+            balanceOf[issueId][h] = 0;
+            rubBalance[h] += amount;
         }
         emit Redeemed(issueId, totalSupply[issueId], total);
         totalSupply[issueId] = 0;
