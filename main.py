@@ -46,6 +46,11 @@ if "status" not in _columns or "doc_hash" not in {r["name"] for r in _conn.execu
     _conn.close()
     raise SystemExit("\nБаза cfa.db создана старой версией программы (нет статусов допуска и модерации).\n"
                      "Пересоздайте её:  python database_setup.py   и при желании:  flask --app main seed-demo\n")
+_users_sql = _conn.execute("SELECT sql FROM sqlite_master WHERE name = 'users'").fetchone()[0]
+if "'IP'" not in _users_sql:
+    _conn.close()
+    raise SystemExit("\nБаза cfa.db создана до появления индивидуальных предпринимателей (роль IP).\n"
+                     "Пересоздайте её:  python database_setup.py   и при желании:  flask --app main seed-demo\n")
 _has_admin = _conn.execute("SELECT 1 FROM users WHERE role = 'ADMIN'").fetchone()
 _conn.close()
 if _is_new_db:
@@ -121,7 +126,8 @@ def issue_page(issue_id):
     if issue["status"] not in PUBLIC_STATUSES and not owner:
         abort(404)
     return render_template("issue_page.html", issue=issue, payload=issue_payload(conn, issue),
-                           bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]))
+                           bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]),
+                           periods=validators.ROV_COUPON_PERIODS, payments=validators.ROV_PAYMENT)
 
 
 @app.route("/login")
@@ -225,7 +231,7 @@ def _issuer_or_redirect():
     user = current_user()
     if not user:
         return None, redirect(url_for("login_page", next=request.path))
-    if user["role"] != "UL" or user["status"] != "APPROVED":
+    if user["role"] not in validators.ISSUER_ROLES or user["status"] != "APPROVED":
         return None, redirect(url_for("cabinet_tab", tab="issuer"))
     return user, None
 
@@ -236,6 +242,7 @@ def issuer_new():
     if resp:
         return resp
     start = date.today()
+    ip = _ip_prefill(user)
     draft = {  # разумные значения по умолчанию — эмитент меняет то, что нужно
         "issuer_full_name": "", "beneficiary": "", "website": "", "ogrn_date": "",
         "title": "", "price_per_cfa": "1000", "coupon_rate": "", "coupon_period": "maturity",
@@ -246,6 +253,7 @@ def issuer_new():
         "collateral": "no", "collateral_desc": "", "early_redemption": "no",
         "risks": ["market", "liquidity", "credit", "operational", "legal"], "risks_extra": "",
         "signer_name": "", "signer_position": "Генеральный директор", **validators.ROV_DEFAULTS,
+        **ip,
     }
     return render_template("cabinet/issuer_form.html", tab="issuer", rov=draft, issue=None, **_rov_choices(user["id"]))
 
@@ -263,6 +271,17 @@ def issuer_edit(issue_id):
     rov = json.loads(issue["rov_json"])
     rov = {k: ("" if v is None else v) for k, v in rov.items()}
     return render_template("cabinet/issuer_form.html", tab="issuer", rov=rov, issue=issue, **_rov_choices(user["id"], issue_id))
+
+
+def _ip_prefill(user) -> dict:
+    """У ИП раздел 1 Решения о выпуске заполняется из анкеты: эмитент, бенефициар и подписант — сам предприниматель."""
+    if user["role"] != "IP":
+        return {}
+    a = json.loads(user["profile_json"] or "{}")
+    fio = a.get("ip_fio", "")
+    return {"issuer_full_name": f"Индивидуальный предприниматель {fio}", "ogrn_date": a.get("ip_reg_date", ""),
+            "beneficiary": f"{fio} — индивидуальный предприниматель, 100 %", "signer_name": fio,
+            "signer_position": "Индивидуальный предприниматель"}
 
 
 def _rov_choices(issuer_id: int, issue_id: int | None = None):
@@ -363,7 +382,7 @@ def doc_registry(issue_id):
     for h in conn.execute(
             """SELECT p.qty, u.full_name, u.role, u.evm_address FROM portfolio_assets p JOIN users u ON u.id = p.user_id
                WHERE p.issue_id = ? AND p.qty > 0 ORDER BY p.qty DESC""", (issue_id,)):
-        holders.append({"name": h["full_name"], "type": "ФЛ" if h["role"] == "FL" else "ЮЛ", "evm": h["evm_address"],
+        holders.append({"name": h["full_name"], "type": validators.ROLE_SHORT.get(h["role"], h["role"]), "evm": h["evm_address"],
                         "qty": h["qty"], "chain_qty": ch.call("balanceOf", issue_id, ch.address_of(h["evm_address"]))
                         if ch and ch.enabled else None})
     return pdf_response(reports.registry_pdf(issue, issuer, holders), f"Reestr_CFA-{issue_id:06d}.pdf")
@@ -452,9 +471,9 @@ def api_login():
 
 @app.route("/api/register", methods=["POST"])
 def api_register():
-    """Регистрация: логин + пароль + анкета ФЛ или ЮЛ. Анкета уходит на проверку администратору."""
+    """Регистрация: логин + пароль + анкета ФЛ, ЮЛ или ИП. Анкета уходит на проверку администратору."""
     data = request.get_json(silent=True) or {}
-    role = "UL" if data.get("role") == "ul" else "FL"
+    role = {"ul": "UL", "ip": "IP"}.get(data.get("role"), "FL")
     raw = data.get("fields") or {}
     f = {k: ("" if v is None else str(v) if k in ("password", "password2") else str(v).strip())
          for k, v in raw.items()}
@@ -466,6 +485,8 @@ def api_register():
     profile = clean["profile"]
     if role == "FL":
         account, bik, wallet_name = "40817810" + _rand_digits(12), "044525225", "Основной кошелёк ФЛ"
+    elif role == "IP":
+        account, bik, wallet_name = profile["bank_account"], profile["bank_bik"], "Кошелёк ИП"
     else:
         account, bik, wallet_name = profile["bank_account"], profile["bank_bik"], "Корпоративный кошелёк"
 
@@ -477,7 +498,7 @@ def api_register():
             wallet_name=wallet_name, bank_account=account, bank_bik=bik,
         )
     except db.FieldError as e:
-        field = {"inn": "fl_inn" if role == "FL" else "ul_inn_kpp"}.get(e.field, e.field)
+        field = {"inn": {"FL": "fl_inn", "IP": "ip_inn"}.get(role, "ul_inn_kpp")}.get(e.field, e.field)
         return _field_errors({field: str(e)})
     except sqlite3.IntegrityError:
         return _field_errors({"login": "Этот логин уже занят — придумайте другой."})
@@ -495,7 +516,7 @@ def api_get_issues():
 
 def _save_decision(issue_id=None):
     me = current_user()
-    if me["role"] != "UL":
+    if me["role"] not in validators.ISSUER_ROLES:
         return json_error("Выпускать ЦФА могут только юридические лица и ИП (259-ФЗ).", 403)
     rov, errors = validators.validate_rov(request.get_json(silent=True) or {})
     if errors:

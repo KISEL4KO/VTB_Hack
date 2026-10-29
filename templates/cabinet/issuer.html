@@ -5,11 +5,11 @@
     <h2 class="pane-title">Мои выпуски</h2>
     <p class="pane-desc">Решения о выпуске ЦФА: подготовка, проверка администратором, сбор заявок и расчёт DvP</p>
   </div>
-  {% if me.role == 'UL' %}
+  {% if me.role in issuer_roles %}
   <a class="btn-primary btn-link" href="{{ url_for('issuer_new') }}">+ Новое решение о выпуске</a>
   {% endif %}
 </div>
-{% if me.role != 'UL' %}
+{% if me.role not in issuer_roles %}
 <div class="light-form-card">Выпускать ЦФА могут только юридические лица и ИП (259-ФЗ).</div>
 {% else %}
 <ol class="flow-steps">

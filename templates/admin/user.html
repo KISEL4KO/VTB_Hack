@@ -4,7 +4,7 @@
   <div>
     <a class="back-link" href="{{ url_for('admin.users') }}">← Допуск участников</a>
     <h2 class="pane-title">{{ u.full_name }}</h2>
-    <p class="pane-desc">{{ 'Физическое лицо' if u.role == 'FL' else 'Юридическое лицо' }} · логин {{ u.login }} · анкета подана {{ u.created_at|ddmm }}</p>
+    <p class="pane-desc">{{ u.role|role_full }} · логин {{ u.login }} · анкета подана {{ u.created_at|ddmm }}</p>
   </div>
   <div class="head-actions">
     <span class="badge badge--{{ user_status[u.status][1] }}">{{ user_status[u.status][0] }}</span>

@@ -202,16 +202,28 @@ def decision_pdf(issue, rov: dict, chain_address: str | None) -> bytes:
                "участника для цифровых рублей и ЦФА; «DvP» — расчёт по принципу «поставка против платежа»."))
 
     s.append(P("1. Сведения об Эмитенте", "h1"))
-    s.append(kv_table([
-        ("Полное наименование", rov.get("issuer_full_name")),
-        ("Сокращённое наименование", iss.get("name")),
-        ("ОГРН", ogrn_kpp[0].strip()),
-        ("Дата присвоения ОГРН", ddmmyyyy(rov.get("ogrn_date"))),
-        ("ИНН / КПП", f"{iss.get('inn', '—')} / {ogrn_kpp[1].strip() if len(ogrn_kpp) > 1 else '—'}"),
-        ("Адрес юридического лица", iss.get("address")),
-        ("Бенефициарный владелец", rov.get("beneficiary")),
-        ("Официальный сайт", rov.get("website") or "—"),
-    ]))
+    if iss.get("type") == "IP":   # индивидуальный предприниматель: ФИО, место жительства, ОГРНИП (259-ФЗ, ст. 3)
+        s.append(kv_table([
+            ("Эмитент", rov.get("issuer_full_name")),
+            ("Наименование на Платформе", iss.get("name")),
+            ("ОГРНИП", ogrn_kpp[0].strip()),
+            ("Дата регистрации ИП", ddmmyyyy(rov.get("ogrn_date"))),
+            ("ИНН", iss.get("inn", "—")),
+            ("Место жительства", iss.get("address")),
+            ("Бенефициарный владелец", rov.get("beneficiary")),
+            ("Официальный сайт", rov.get("website") or "—"),
+        ]))
+    else:
+        s.append(kv_table([
+            ("Полное наименование", rov.get("issuer_full_name")),
+            ("Сокращённое наименование", iss.get("name")),
+            ("ОГРН", ogrn_kpp[0].strip()),
+            ("Дата присвоения ОГРН", ddmmyyyy(rov.get("ogrn_date"))),
+            ("ИНН / КПП", f"{iss.get('inn', '—')} / {ogrn_kpp[1].strip() if len(ogrn_kpp) > 1 else '—'}"),
+            ("Адрес юридического лица", iss.get("address")),
+            ("Бенефициарный владелец", rov.get("beneficiary")),
+            ("Официальный сайт", rov.get("website") or "—"),
+        ]))
 
     s.append(P("2. Сведения об операторе информационной системы", "h1"))
     s.append(kv_table([
@@ -314,7 +326,7 @@ def results_pdf(issue, issuer, orders: list, chain_info: dict | None) -> bytes:
     executed = [o for o in orders if o["status"] == "EXECUTED"]
     refunded = [o for o in orders if o["status"] == "REFUNDED"]
     investors = {o["user_id"] for o in orders}
-    fl = {o["user_id"] for o in orders if o["role"] == "FL"}
+    fl = {o["user_id"] for o in orders if o["role"] in V.PERSON_ROLES}
     raised = sum(o["total_rub"] for o in executed)
     s = [P("1. Параметры выпуска", "h1"), kv_table([
         ("Эмитент", f"{issuer['full_name']}, ИНН {issuer['inn']}"),
@@ -336,7 +348,7 @@ def results_pdf(issue, issuer, orders: list, chain_info: dict | None) -> bytes:
         ("Размещено ЦФА", f"{num(sum(o['qty'] for o in executed))} шт."),
         ("Привлечено средств", rub(raised)),
         ("Возвращено инвесторам", rub(sum(o["total_rub"] for o in refunded))),
-        ("Количество инвесторов", f"{len(investors)} (физлиц — {len(fl)}, юрлиц — {len(investors) - len(fl)})"),
+        ("Количество инвесторов", f"{len(investors)} (физлиц и ИП — {len(fl)}, юрлиц — {len(investors) - len(fl)})"),
         ("Количество заявок", str(len(orders))),
     ])]
     if chain_info:
@@ -348,7 +360,7 @@ def results_pdf(issue, issuer, orders: list, chain_info: dict | None) -> bytes:
         ])]
     s += [P("4. Заявки", "h1"), grid_table(
         ["№", "Дата", "Инвестор", "Кол-во", "Сумма", "Статус"],
-        [[str(o["id"]), ddmmyyyy(o["created_at"]), ("ФЛ" if o["role"] == "FL" else "ЮЛ") + f" · участник #{o['user_id']}",
+        [[str(o["id"]), ddmmyyyy(o["created_at"]), V.ROLE_SHORT.get(o["role"], o["role"]) + f" · участник #{o['user_id']}",
           num(o["qty"]), rub(o["total_rub"]), STATUS_RU.get(o["status"], o["status"])] for o in orders]
         or [["—", "", "Заявок не было", "", "", ""]],
         [12 * mm, 30 * mm, 42 * mm, 20 * mm, 30 * mm, 40 * mm], align_right=(3, 4))]
@@ -388,7 +400,7 @@ def statement_pdf(user, wallet, holdings: list, ops: list, chain_bal: dict | Non
     no = f"ST-{user['id']:05d}-{datetime.now():%Y%m%d}"
     s = [P("1. Участник", "h1"), kv_table([
         ("Участник", user["full_name"]),
-        ("Тип", "Физическое лицо" if user["role"] == "FL" else "Юридическое лицо"),
+        ("Тип", V.ROLE_FULL.get(user["role"], user["role"])),
         ("ИНН", user["inn"]),
         ("Адрес в распределённом реестре", user["evm_address"]),
         ("Статус инвестора", "квалифицированный" if user["is_qualified"] or user["role"] == "UL"
@@ -441,7 +453,7 @@ def application_pdf(user, sections, checks: list[dict], reviewer: str | None) ->
     no = f"KYC-{user['id']:05d}"
     s = [kv_table([
         ("Участник", user["full_name"]),
-        ("Тип", "Физическое лицо" if user["role"] == "FL" else "Юридическое лицо"),
+        ("Тип", V.ROLE_FULL.get(user["role"], user["role"])),
         ("Логин", user["login"]),
         ("Дата подачи анкеты", ddmmyyyy(user["created_at"])),
         ("Статус допуска", STATUS_RU.get(user["status"], user["status"])),
@@ -463,7 +475,7 @@ def application_pdf(user, sections, checks: list[dict], reviewer: str | None) ->
 # 7. Реестр участников (админ)
 # ------------------------------------------------------------------------------
 def participants_pdf(users: list) -> bytes:
-    rows = [[str(u["id"]), u["full_name"], "ФЛ" if u["role"] == "FL" else "ЮЛ", u["inn"] or "—", u["login"],
+    rows = [[str(u["id"]), u["full_name"], V.ROLE_SHORT.get(u["role"], u["role"]), u["inn"] or "—", u["login"],
              STATUS_RU.get(u["status"], u["status"]), ddmmyyyy(u["created_at"]),
              rub(u["balance_rub"]), rub(u["locked_rub"])] for u in users]
     s = [P(f"Всего участников: {len(users)}. Допущено: {sum(u['status'] == 'APPROVED' for u in users)}, "

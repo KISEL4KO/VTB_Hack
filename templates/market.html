@@ -29,7 +29,7 @@
         <h2 class="section-title">Доступные выпуски на рынке ЦФА</h2>
         <p class="section-subtitle">Выберите выпуск для просмотра параметров или перейдите к подаче заявки на покупку</p>
       </div>
-      {% if not me or me.role == 'UL' %}<button type="button" class="btn-primary" onclick="location.href='{{ url_for('issuer_new') }}'">+ Создать выпуск ЦФА</button>{% endif %}
+      {% if not me or me.role in issuer_roles %}<button type="button" class="btn-primary" onclick="location.href='{{ url_for('issuer_new') }}'">+ Создать выпуск ЦФА</button>{% endif %}
     </div>
 
     <div id="market-issues-grid" class="cards-grid-3">

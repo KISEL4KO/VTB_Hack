@@ -39,18 +39,25 @@
 <form id="form-rov" class="rov-form" data-issue-id="{{ issue.id if issue else '' }}" novalidate>
   <section class="rov-section">
     <h3><span>1</span> Сведения об эмитенте</h3>
+    {% set is_ip = me.role == 'IP' %}
     <div class="rov-prefill">
-      <div><span>Сокращённое наименование</span><b>{{ me.full_name }}</b></div>
-      <div><span>ОГРН / КПП</span><b>{{ me.snils_or_ogrn }}</b></div>
+      <div><span>{{ 'Эмитент' if is_ip else 'Сокращённое наименование' }}</span><b>{{ me.full_name }}</b></div>
+      <div><span>{{ 'ОГРНИП' if is_ip else 'ОГРН / КПП' }}</span><b>{{ me.snils_or_ogrn }}</b></div>
       <div><span>ИНН</span><b>{{ me.inn }}</b></div>
-      <div><span>Адрес</span><b>{{ me.address }}</b></div>
+      <div><span>{{ 'Место жительства' if is_ip else 'Адрес' }}</span><b>{{ me.address }}</b></div>
       <small>Берутся из проверенной анкеты эмитента</small>
     </div>
+    {% if is_ip %}
+    <p class="rov-note">Эмитент — индивидуальный предприниматель (259-ФЗ, ст. 2 ч. 3). В Решении указываются ФИО, место жительства
+      и ОГРНИП; предприниматель отвечает по обязательствам всем своим имуществом и подписывает документ своей УКЭП.</p>
+    {% endif %}
     <div class="light-form-grid">
-      {{ field('issuer_full_name', 'Полное наименование', full=True, attrs='placeholder="Общество с ограниченной ответственностью «…»"') }}
-      {{ field('ogrn_date', 'Дата присвоения ОГРН', 'date') }}
+      {{ field('issuer_full_name', 'ФИО эмитента полностью' if is_ip else 'Полное наименование', full=True,
+               attrs='placeholder="Индивидуальный предприниматель Иванов Иван Иванович"' if is_ip else 'placeholder="Общество с ограниченной ответственностью «…»"') }}
+      {{ field('ogrn_date', 'Дата регистрации ИП (присвоения ОГРНИП)' if is_ip else 'Дата присвоения ОГРН', 'date') }}
       {{ field('website', 'Официальный сайт (необязательно)', attrs='placeholder="example.ru"') }}
-      {{ field('beneficiary', 'Бенефициарный владелец', full=True, attrs='placeholder="ФИО и доля владения"') }}
+      {{ field('beneficiary', 'Бенефициарный владелец', full=True, attrs='placeholder="ФИО и доля владения"',
+               hint='У ИП бенефициар — сам предприниматель' if is_ip else '') }}
     </div>
   </section>
 
@@ -119,6 +126,8 @@
 
   <section class="rov-section">
     <h3><span>11</span> Выкуп ЦФА эмитентом</h3>
+    <p class="rov-note">Ваше обязательство купить ЦФА у владельцев до погашения на описанных условиях. Платформа его не исполняет
+      сама: условия фиксируются в документе, а инвесторы видят их в аналитике (выкуп добавляет баллы к оценке).</p>
     <div class="light-form-grid">
       {{ select('buyback', 'Выкуп до погашения', {'no': 'Не предусмотрен', 'yes': 'Предусмотрен'}) }}
       {{ area('buyback_terms', 'Условия выкупа (если предусмотрен)', 2) }}
@@ -127,6 +136,8 @@
 
   <section class="rov-section">
     <h3><span>12</span> Иные условия</h3>
+    <p class="rov-note">Обеспечение, досрочное погашение и порядок споров — юридические обязательства эмитента. Залог оформляется
+      отдельным договором; документ с этими условиями подписывается УКЭП, а его SHA-256 записывается в смарт-контракт.</p>
     <div class="light-form-grid">
       {{ select('collateral', 'Обеспечение', {'no': 'Не предусмотрено', 'yes': 'Предусмотрено'}) }}
       {{ select('early_redemption', 'Досрочное погашение', {'no': 'Не допускается', 'yes': 'Допускается'}) }}

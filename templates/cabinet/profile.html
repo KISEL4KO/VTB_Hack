@@ -12,12 +12,12 @@
     <div class="light-field"><label>Наименование / ФИО участника</label><input type="text" value="{{ me.full_name }}" readonly></div>
     <div class="light-field"><label>Логин для входа</label><input type="text" value="{{ me.login }}" readonly></div>
     <div class="light-field"><label>Тип участника и квалификация</label>
-      <input type="text" readonly value="{% if me.role == 'UL' %}Юридическое лицо{% elif me.is_qualified %}Физлицо, квалифицированный инвестор{% else %}Физлицо, неквалифицированный (лимит 600 000 ₽ в год){% endif %}"></div>
+      <input type="text" readonly value="{% if me.role == 'UL' %}Юридическое лицо{% else %}{{ 'Индивидуальный предприниматель' if me.role == 'IP' else 'Физлицо' }}, {{ 'квалифицированный инвестор' if me.is_qualified else 'неквалифицированный инвестор (лимит 600 000 ₽ в год)' }}{% endif %}"></div>
     <div class="light-field"><label>ИНН участника</label><input type="text" value="{{ me.inn }}" readonly></div>
     <div class="light-field light-field--full"><label>Адрес в EVM-сети платформы</label><input type="text" value="{{ me.evm_address }}" readonly></div>
     <div class="light-field light-field--full"><label>Транзакция включения в белый список</label>
       <input type="text" value="{{ me.evm_tx_hash or ('после одобрения анкеты' if me.status == 'PENDING' else '—') }}" readonly></div>
-    {% if me.role == 'FL' and not me.is_qualified %}
+    {% if me.role in person_roles and not me.is_qualified %}
     <div class="light-field light-field--full"><label>Использовано годового лимита</label>
       <input type="text" readonly value="{{ me.yearly_spent_rub|rub }} из 600 000 ₽ (остаток {{ (600000 - me.yearly_spent_rub)|rub }})"></div>
     {% endif %}

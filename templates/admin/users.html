@@ -19,7 +19,7 @@
       {% for it in items %}{% set u = it.u %}
       <tr>
         <td><b>{{ u.full_name }}</b><br><small>{{ u.login }}</small></td>
-        <td>{{ 'ФЛ' if u.role == 'FL' else 'ЮЛ' }}{% if u.role == 'FL' and u.is_qualified %}<br><small>квал.</small>{% endif %}</td>
+        <td>{{ u.role|role_short }}{% if u.role in person_roles and u.is_qualified %}<br><small>квал.</small>{% endif %}</td>
         <td>{{ u.inn }}</td>
         <td>{{ u.created_at|ddmm }}</td>
         <td><span class="check-pill check-pill--{{ it.check }}">{{ {'ok': 'Всё сходится', 'warn': 'Есть замечания', 'fail': 'Препятствие'}[it.check] }}</span></td>

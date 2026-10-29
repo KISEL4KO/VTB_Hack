@@ -368,3 +368,9 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
   .rov-layout { grid-template-columns: minmax(0, 1fr); }
   .rov-dash { position: static; max-height: none; order: -1; }
 }
+
+/* Условия выпуска и кто их исполняет (страница выпуска) */
+.cond-table td { vertical-align: top; }
+.cond-table td:first-child { white-space: nowrap; color: #6b7280; }
+.cond-table td:last-child small { display: block; margin-top: 4px; color: #6b7280; line-height: 1.35; }
+.cond-table .badge { margin: 0 4px 2px 0; display: inline-block; }

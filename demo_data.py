@@ -30,6 +30,7 @@ SUMMARY = f"""
   Эмитент (ЮЛ)                  demo_issuer      допущен, 3 выпуска + 1 на модерации
   Инвестор-физлицо              demo_investor    допущен, есть ЦФА и заявки
   Инвестор-юрлицо               demo_fund        допущен, есть ЦФА
+  Эмитент и инвестор (ИП)       demo_ip          допущен, свой выпуск со сбором заявок + ЦФА в заявке
   Новая анкета (ФЛ)             new_anna         ждёт проверки — данные корректны
   Новая анкета (ЮЛ)             new_company      ждёт проверки — ошибки в ИНН и счёте
   Новая анкета (ФЛ)             new_ivan         ждёт проверки — паспорт уже используется
@@ -65,13 +66,28 @@ def _ul(login, name, inn, kpp, ogrn, account, rep_fio, rep_passport, rep_inn, ci
                 wallet="Корпоративный кошелёк")
 
 
+def _ip(login, fio, inn, ogrnip, reg_date, account, passport, phone, email, birth, city, street, qualified=False):
+    anketa = {
+        "ip_fio": fio, "ip_birth_date": birth, "ip_birth_place": city, "ip_ogrnip": ogrnip, "ip_reg_date": reg_date,
+        "ip_inn": inn, "ip_phone": phone, "ip_email": email, "ip_passport_num": passport,
+        "ip_passport_issued": "770-002, ГУ МВД России по г. Москве", "ip_reg_city": city, "ip_reg_street": street,
+        "ip_bank_account": account, "ip_bank_bik": "044525225",
+        "ip_investor_status": "qualified" if qualified else "unqualified",
+    }
+    profile = dict(full_name=f"ИП {fio}", inn=inn, snils_or_ogrn=ogrnip, phone=phone, email=email,
+                   passport_or_rep=f"{validators.fmt_passport(passport)}, {anketa['ip_passport_issued']}",
+                   address=f"{city}, {street}", is_qualified=int(qualified))
+    return dict(role="IP", login=login, profile=profile, anketa=anketa, account=account, bik="044525225",
+                wallet="Кошелёк ИП")
+
+
 def _register(conn, p) -> int:
     return db.register_user(conn, role=p["role"], login=p["login"], password_hash=generate_password_hash(PASSWORD),
                             profile=p["profile"], profile_json=p["anketa"], evm_address="0x" + secrets.token_hex(20),
                             wallet_name=p["wallet"], bank_account=p["account"], bank_bik=p["bik"])["user_id"]
 
 
-def _rov(title, price, min_qty, max_qty, rate, investors="all", days_to_maturity=400):
+def _rov(title, price, min_qty, max_qty, rate, investors="all", days_to_maturity=400, **extra):
     today = date.today()
     raw = {
         "issuer_full_name": "Общество с ограниченной ответственностью «Демо-Лизинг»",
@@ -85,6 +101,7 @@ def _rov(title, price, min_qty, max_qty, rate, investors="all", days_to_maturity
         "early_redemption": "no", "risks": ["market", "liquidity", "credit", "operational", "legal"],
         "signer_name": "Смирнов Алексей Викторович", "signer_position": "Генеральный директор", "confirm": "true",
         **validators.ROV_DEFAULTS,
+        **extra,
     }
     rov, errors = validators.validate_rov(raw)
     assert not errors, errors
@@ -103,7 +120,10 @@ def seed(conn, chain) -> None:
     investor = _register(conn, _fl("demo_investor", "Петров Пётр Петрович", "770100000079", "12345678964",
                                    "4500123456", "+79990000001", "investor@example.ru", "1995-04-12",
                                    "г. Казань, Республика Татарстан", "ул. Баумана, д. 5, кв. 12"))
-    for uid in (issuer, fund, investor):
+    ip = _register(conn, _ip("demo_ip", "Волков Андрей Николаевич", "772400001214", "319770000123451", "2019-06-03",
+                             "40802810800000000123", "4511223344", "+79990000005", "ip@example.ru", "1986-11-02",
+                             "г. Москва", "ул. Профсоюзная, д. 12, кв. 40"))
+    for uid in (issuer, fund, investor, ip):
         db.approve_user(conn, chain, admin_id, uid, "Анкета проверена, реквизиты сходятся")
 
     # Заявки, которые ждут проверки — для демонстрации админ-панели
@@ -119,6 +139,7 @@ def seed(conn, chain) -> None:
     # Деньги на кошельках
     db.deposit_wallet(conn, investor, 500_000, chain)
     db.deposit_wallet(conn, fund, 5_000_000, chain)
+    db.deposit_wallet(conn, ip, 300_000, chain)
 
     # Выпуск 1: размещён (DvP)
     i1 = db.save_issue_decision(conn, issuer, _rov("ЦФА Демо-Лизинг 01", 1000, 200, 1000, 18.5))["issue_id"]
@@ -139,6 +160,20 @@ def seed(conn, chain) -> None:
     db.buy_cfa_on_showcase(conn, investor, i3, 40, "1234", chain)
     db.buy_cfa_on_showcase(conn, fund, i3, 120, "UKEP", chain)
 
+    db.buy_cfa_on_showcase(conn, ip, i3, 10, "UKEP", chain)          # ИП покупает как инвестор (лимит физлица, УКЭП)
+
     # Выпуск 4: ждёт модерации
     db.save_issue_decision(conn, issuer, _rov("ЦФА Демо-Девелопмент 01", 100_000, 10, 50, 21,
                                               investors="qualified", days_to_maturity=700))
+
+    # Выпуск 5: эмитент — индивидуальный предприниматель, ежемесячный купон, идёт сбор заявок
+    i5 = db.save_issue_decision(conn, ip, _rov(
+        "ЦФА ИП Волков 01", 10_000, 20, 100, 22, days_to_maturity=210,
+        issuer_full_name="Индивидуальный предприниматель Волков Андрей Николаевич", ogrn_date="2019-06-03",
+        beneficiary="Волков Андрей Николаевич — индивидуальный предприниматель, 100 %", website="",
+        coupon_period="monthly", collateral="yes", collateral_desc="Залог оборудования кофейни по договору залога "
+        "№ 1/2026 оценочной стоимостью 1 500 000 ₽", signer_name="Волков Андрей Николаевич",
+        signer_position="Индивидуальный предприниматель"))["issue_id"]
+    db.approve_issue(conn, chain, admin_id, i5, "ИП вправе выпускать ЦФА (259-ФЗ, ст. 2), реквизиты сходятся")
+    db.buy_cfa_on_showcase(conn, investor, i5, 5, "1234", chain)
+    db.buy_cfa_on_showcase(conn, fund, i5, 10, "UKEP", chain)

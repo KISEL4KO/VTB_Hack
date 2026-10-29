@@ -333,11 +333,14 @@ var REGISTER_RULES = {
 
   // --- юрлицо ---
   ul_company_name: req('Укажите сокращённое наименование.', function (v) {
+    if (/^(ИП|КФХ)\s/i.test(v)) return 'Индивидуальный предприниматель регистрируется на вкладке «Для ИП».';
     return COMPANY_RE.test(v.split(/\s+/).join(' ')) && v.length <= 120
-      ? '' : 'Начните с формы собственности: ООО «Ромашка», АО «Альфа», ИП Иванов И. И.';
+      ? '' : 'Начните с формы собственности: ООО «Ромашка», АО «Альфа», ПАО «Бета».';
   }),
-  ul_ogrn: req('Укажите ОГРН / ОГРНИП.', function (v) {
-    var n = onlyDigits(v).length; return n === 13 || n === 15 ? '' : 'ОГРН — 13 цифр, ОГРНИП — 15 цифр.';
+  ul_ogrn: req('Укажите ОГРН.', function (v) {
+    var n = onlyDigits(v).length;
+    if (n === 15) return '15 цифр — это ОГРНИП. ИП регистрируется на вкладке «Для ИП».';
+    return n === 13 ? '' : 'ОГРН юридического лица — 13 цифр.';
   }),
   ul_inn_kpp: req('Укажите ИНН и КПП.', function (v) {
     var p = v.split('/');
@@ -357,6 +360,45 @@ var REGISTER_RULES = {
   }),
   ul_bank_account: req('Укажите расчётный счёт.', function (v) { return onlyDigits(v).length === 20 ? '' : 'Расчётный счёт — 20 цифр.'; }),
   ul_bank_bik: req('Укажите БИК.', function (v) {
+    var d = onlyDigits(v); return d.length === 9 && d.indexOf('04') === 0 ? '' : 'БИК — 9 цифр и начинается с 04.';
+  }),
+
+  // --- индивидуальный предприниматель ---
+  ip_fio: req('Укажите ФИО предпринимателя.', function (v) {
+    return FIO_RE.test(v.split(/\s+/).join(' ')) ? '' : 'Фамилия, имя и (при наличии) отчество — только буквы и дефис.';
+  }),
+  ip_birth_date: function (v, form, el) {
+    if (el.validity && el.validity.badInput) return 'Укажите дату рождения полностью.';
+    return v ? checkBirthDate(v) : 'Укажите дату рождения.';
+  },
+  ip_birth_place: req('Укажите место рождения.', function (v) {
+    return v.length >= 2 && /[A-Za-zА-Яа-яЁё]/.test(v) ? '' : 'Укажите населённый пункт.';
+  }),
+  ip_ogrnip: req('Укажите ОГРНИП.', function (v) {
+    var d = onlyDigits(v);
+    if (d.length !== 15) return 'ОГРНИП — 15 цифр.';
+    return d[0] === '3' ? '' : 'ОГРНИП начинается с цифры 3.';
+  }),
+  ip_reg_date: function (v, form, el) {
+    if (el.validity && el.validity.badInput) return 'Укажите дату полностью.';
+    if (!v) return 'Укажите дату регистрации ИП.';
+    return new Date(v) > new Date() ? 'Дата не может быть в будущем.' : '';
+  },
+  ip_inn: req('Укажите ИНН.', function (v) { return onlyDigits(v).length === 12 ? '' : 'ИНН индивидуального предпринимателя — 12 цифр.'; }),
+  ip_phone: req('Укажите телефон.', function (v) { return phoneOk(v) ? '' : 'Российский номер: +7 и 10 цифр.'; }),
+  ip_email: req('Укажите e-mail.', function (v) { return EMAIL_RE.test(v) ? '' : 'Некорректный e-mail, пример: user@example.ru'; }),
+  ip_passport_num: req('Укажите серию и номер паспорта.', checkPassport),
+  ip_passport_issued: req('Заполните поле.', function (v) {
+    return /\d{3}-\d{3}/.test(v) && v.length >= 10 ? '' : 'Укажите код подразделения (000-000) и кем выдан.';
+  }),
+  ip_reg_city: req('Выберите город регистрации.', checkCity),
+  ip_reg_street: req('Укажите улицу, дом и квартиру.', checkStreet),
+  ip_bank_account: req('Укажите расчётный счёт.', function (v) {
+    var d = onlyDigits(v);
+    if (d.length !== 20) return 'Расчётный счёт — 20 цифр.';
+    return d.indexOf('40802') === 0 ? '' : 'Счёт ИП начинается с 40802.';
+  }),
+  ip_bank_bik: req('Укажите БИК.', function (v) {
     var d = onlyDigits(v); return d.length === 9 && d.indexOf('04') === 0 ? '' : 'БИК — 9 цифр и начинается с 04.';
   })
 };
@@ -540,10 +582,11 @@ if (document.querySelector('input[data-suggest="cities"]')) loadCities();
 
 // Дата рождения: нельзя выбрать дату позже «сегодня минус 18 лет»
 (function () {
-  var bd = document.querySelector('input[name="fl_birth_date"]');
-  if (!bd) return;
+  function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   var t = new Date(), max = new Date(t.getFullYear() - 18, t.getMonth(), t.getDate());
-  bd.max = max.getFullYear() + '-' + String(max.getMonth() + 1).padStart(2, '0') + '-' + String(max.getDate()).padStart(2, '0');
+  document.querySelectorAll('input[name="fl_birth_date"], input[name="ip_birth_date"]').forEach(function (bd) { bd.max = iso(max); });
+  var rd = document.querySelector('input[name="ip_reg_date"]');
+  if (rd) rd.max = iso(t);   // дата регистрации ИП — не позже сегодняшнего дня
 })();
 
 // ---------- Переключатели ----------
@@ -561,16 +604,20 @@ function switchAuthMode(mode) {
   if (firstInput) firstInput.focus();
 }
 
+var REG_ROLES = ['fl', 'ul', 'ip'];
 function switchAuthRole(role) {
-  var isFl = role === 'fl';
   // disabled у fieldset: поля неактивной анкеты не отправляются и не проверяются
-  $('#fs-fl').disabled = !isFl;
-  $('#fs-ul').disabled = isFl;
-  $('#fs-fl').classList.toggle('hidden', !isFl);
-  $('#fs-ul').classList.toggle('hidden', isFl);
-  $('#btn-role-fl').classList.toggle('auth-role-tab--active', isFl);
-  $('#btn-role-ul').classList.toggle('auth-role-tab--active', !isFl);
+  REG_ROLES.forEach(function (r) {
+    var on = r === role, fs = $('#fs-' + r);
+    if (!fs) return;
+    fs.disabled = !on;
+    fs.classList.toggle('hidden', !on);
+    $('#btn-role-' + r).classList.toggle('auth-role-tab--active', on);
+  });
   showError('register-error', '');
+}
+function currentAuthRole() {
+  return REG_ROLES.filter(function (r) { var fs = $('#fs-' + r); return fs && !fs.disabled; })[0] || 'fl';
 }
 
 // ---------- Отправка формы входа ----------
@@ -612,7 +659,7 @@ if (registerForm) {
     btn.disabled = true;
     try {
       await api('/api/register', {
-        role: $('#fs-fl').disabled ? 'ul' : 'fl',
+        role: currentAuthRole(),
         fields: Object.fromEntries(new FormData(registerForm).entries())   // disabled-поля сюда не попадают
       });
       location.href = '/cabinet';   // анкета ушла на проверку — кабинет покажет статус

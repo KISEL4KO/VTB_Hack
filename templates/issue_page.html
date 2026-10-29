@@ -71,6 +71,44 @@
       </div>
     </div>
 
+    <div class="dash-card">
+      <h3>Условия выпуска и как они исполняются</h3>
+      <p class="dash-card__sub">Часть условий исполняет смарт-контракт, часть проверяет сервер платформы, остальное — обязательства
+        эмитента, закреплённые в Решении о выпуске. SHA-256 документа записан в контракт, поэтому изменить условия задним числом нельзя.</p>
+      <div class="ui-table-wrap">
+        <table class="ui-table cond-table">
+          <thead><tr><th>Раздел</th><th>Условие</th><th>Значение</th><th>Кто исполняет</th></tr></thead>
+          <tbody>
+            {% set SC = '<span class="badge badge--blue">смарт-контракт</span>' %}
+            {% set PL = '<span class="badge badge--green">платформа</span>' %}
+            {% set EM = '<span class="badge badge--amber">обязательство эмитента</span>' %}
+            <tr><td>4, 7</td><td>Выпуск состоялся, если собран минимум</td><td>{{ issue.min_qty|num }} шт.</td>
+              <td>{{ SC|safe }} <small>finalize: собрано не меньше минимума — ЦФА инвесторам, деньги эмитенту (DvP); меньше — возврат всем</small></td></tr>
+            <tr><td>4</td><td>Максимальный объём</td><td>{{ issue.max_qty|num }} шт.</td>
+              <td>{{ SC|safe }} <small>subscribe не примет заявку сверх объёма</small></td></tr>
+            <tr><td>5</td><td>Цена 1 ЦФА</td><td>{{ issue.price_per_cfa|rub }}</td>
+              <td>{{ SC|safe }} <small>в холд уходит ровно количество × цена</small></td></tr>
+            <tr><td>8</td><td>Способ оплаты</td><td>{{ payments.get(rov.payment_method, '—') }}</td>
+              <td>{{ SC|safe }} <small>цифровые рубли блокируются в контракте до закрытия сбора</small></td></tr>
+            <tr><td>10</td><td>Круг лиц</td><td>{{ 'только квалифицированные' if issue.only_qual else 'все участники' }}</td>
+              <td>{{ SC|safe }} {{ PL|safe }} <small>белый список и флаг квалификации — в контракте, лимит 600 000 ₽ — на платформе</small></td></tr>
+            <tr><td>6</td><td>Период размещения</td><td>{{ issue.placement_start|ddmm }} — {{ issue.placement_end|ddmm }}</td>
+              <td>{{ PL|safe }} <small>заявки принимаются только в эти даты</small></td></tr>
+            <tr><td>4</td><td>Размер одной заявки</td><td>от {{ issue.min_order_qty|num }}{% if issue.max_order_qty %} до {{ issue.max_order_qty|num }}{% endif %} шт.</td>
+              <td>{{ PL|safe }}</td></tr>
+            <tr><td>3</td><td>Купоны и погашение</td><td>{{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} %, {{ periods.get(rov.coupon_period, '') }}; погашение {{ issue.maturity_date|ddmm }}</td>
+              <td>{{ EM|safe }} <small>в прототипе выплаты не исполняются автоматически</small></td></tr>
+            <tr><td>11</td><td>Выкуп эмитентом</td><td>{{ rov.buyback_terms if rov.buyback == 'yes' else 'не предусмотрен' }}</td><td>{{ EM|safe }}</td></tr>
+            <tr><td>12</td><td>Обеспечение</td><td>{{ rov.collateral_desc if rov.collateral == 'yes' else 'не предусмотрено' }}</td>
+              <td>{{ EM|safe }} <small>{{ 'залог оформляется договором вне платформы' if rov.collateral == 'yes' else '' }}</small></td></tr>
+            <tr><td>12</td><td>Досрочное погашение</td><td>{{ 'допускается' if rov.early_redemption == 'yes' else 'не допускается' }}</td><td>{{ EM|safe }}</td></tr>
+            <tr><td>9, 12</td><td>Ответственность и споры</td><td>{{ rov.disputes|truncate(90) }}</td>
+              <td>{{ EM|safe }} <small>претензия эмитенту, затем суд</small></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <details class="dash-card dash-method">
       <summary><b>Как считаются показатели</b></summary>
       <ul>

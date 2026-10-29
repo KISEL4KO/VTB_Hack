@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from blockchain import doc_hash, to_bytes32
+from validators import ISSUER_ROLES, PERSON_ROLES, SIGN_PEP_ROLES
 
 DB_PATH = Path(__file__).parent / "cfa.db"
 
@@ -49,16 +50,16 @@ SCHEMA_SQL = """
 -- 1. Участники: физлица (FL), юрлица (UL) и администраторы платформы (ADMIN)
 CREATE TABLE IF NOT EXISTS users (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    role              TEXT NOT NULL CHECK (role IN ('FL', 'UL', 'ADMIN')),
-    full_name         TEXT NOT NULL,                              -- ФИО / сокращённое наименование
+    role              TEXT NOT NULL CHECK (role IN ('FL', 'UL', 'IP', 'ADMIN')),   -- физлицо, юрлицо, ИП, админ
+    full_name         TEXT NOT NULL,                              -- ФИО / сокращённое наименование / «ИП Фамилия И. О.»
     inn               TEXT UNIQUE,                                -- ИНН (у администратора нет)
-    snils_or_ogrn     TEXT,                                       -- СНИЛС (ФЛ) или ОГРН / КПП (ЮЛ)
+    snils_or_ogrn     TEXT,                                       -- СНИЛС (ФЛ), ОГРН / КПП (ЮЛ) или ОГРНИП (ИП)
     phone             TEXT,
     email             TEXT,
-    passport_or_rep   TEXT,                                       -- Паспорт ФЛ или представитель ЮЛ
+    passport_or_rep   TEXT,                                       -- Паспорт ФЛ и ИП или представитель ЮЛ
     address           TEXT,
     is_qualified      INTEGER NOT NULL DEFAULT 0,                 -- 0 = неквал (лимит 600 000 ₽/год), 1 = квал / ЮЛ
-    yearly_spent_rub  INTEGER NOT NULL DEFAULT 0,                 -- Сколько неквал ФЛ уже инвестировал за год
+    yearly_spent_rub  INTEGER NOT NULL DEFAULT 0,                 -- Сколько неквал ФЛ или ИП уже инвестировал за год
     evm_address       TEXT,                                       -- Адрес участника в EVM-сети платформы
     login             TEXT NOT NULL UNIQUE,                       -- Логин (в нижнем регистре)
     password_hash     TEXT NOT NULL,                              -- Хэш пароля (сам пароль НЕ хранится!)
@@ -435,13 +436,13 @@ def save_issue_decision(conn: sqlite3.Connection, issuer_id: int, rov: Dict[str,
     """
     with conn:
         issuer = conn.execute("SELECT * FROM users WHERE id = ?", (issuer_id,)).fetchone()
-        if not issuer or issuer["role"] != "UL":
+        if not issuer or issuer["role"] not in ISSUER_ROLES:
             raise ValueError("Выпускать ЦФА по закону 259-ФЗ могут только юридические лица и ИП!")
 
         # В документ попадают и сведения об эмитенте — на момент подачи
         document = {**rov, "issuer": {
             "name": issuer["full_name"], "inn_kpp_ogrn": issuer["snils_or_ogrn"], "inn": issuer["inn"],
-            "address": issuer["address"],
+            "address": issuer["address"], "type": issuer["role"],
         }}
         dhash = doc_hash(document)
         ukep_sig = "UKEP_SIG_" + calc_sha256(f"{issuer['inn']}|{dhash}")[:24]
@@ -570,23 +571,26 @@ def buy_cfa_on_showcase(
                 f"Недостаточно свободных средств! Нужно {_fmt(total_rub)} ₽, на кошельке {_fmt(wallet['balance_rub'])} ₽."
             )
 
-        # РАЗЛИЧИЕ 1: Физическое лицо — квалификация, лимит 600 000 ₽ и СМС-код
-        if user["role"] == "FL":
+        # РАЗЛИЧИЕ 1: физические лица (ФЛ и ИП) — квалификация и лимит 600 000 ₽;
+        #              ФЛ подписывает кодом из СМС, ИП — своей УКЭП
+        if user["role"] in PERSON_ROLES:
             if issue["only_qual"] == 1 and user["is_qualified"] == 0:
                 raise ValueError("Этот выпуск доступен только квалифицированным инвесторам!")
             if user["is_qualified"] == 0 and (user["yearly_spent_rub"] + total_rub > 600_000):
                 rem = 600_000 - user["yearly_spent_rub"]
                 raise ValueError(
-                    f"Превышен годовой лимит 600 000 ₽ для неквалифицированного ФЛ (Указание ЦБ 5635-У)! "
-                    f"Доступный остаток лимита: {_fmt(rem)} ₽."
+                    f"Превышен годовой лимит 600 000 ₽ для неквалифицированного инвестора-физлица "
+                    f"(Указание ЦБ 5635-У)! Доступный остаток лимита: {_fmt(rem)} ₽."
                 )
+            conn.execute("UPDATE users SET yearly_spent_rub = yearly_spent_rub + ? WHERE id = ?",
+                         (total_rub, user_id))
+
+        # РАЗЛИЧИЕ 2: подпись заявки — ФЛ кодом из СМС (ПЭП), ЮЛ и ИП — УКЭП (лимита у ЮЛ нет)
+        if user["role"] in SIGN_PEP_ROLES:
             if sign_code.strip() != "1234":
                 raise ValueError("Неверный СМС-код ПЭП! Для тестового прототипа введите 1234.")
             sign_type = "PEP_SMS"
             sig_hash = "PEP_SMS_" + calc_sha256(f"{user['id']}|{issue_id}|{qty}|1234")[:20]
-            conn.execute("UPDATE users SET yearly_spent_rub = yearly_spent_rub + ? WHERE id = ?",
-                         (total_rub, user_id))
-        # РАЗЛИЧИЕ 2: Юридическое лицо — лимита нет, подпись УКЭП
         else:
             sign_type = "UKEP_CMS"
             sig_hash = "UKEP_CMS_" + calc_sha256(f"{user['inn']}|{issue_id}|{qty}|{sign_code}")[:20]
@@ -665,7 +669,7 @@ def finalize_issue_dvp(conn: sqlite3.Connection, issue_id: int, chain=None) -> D
                     "UPDATE wallets SET locked_rub = locked_rub - ?, balance_rub = balance_rub + ? WHERE user_id = ?",
                     (cost, cost, inv_id),
                 )
-                if order["role"] == "FL":   # годовой лимит неквал ФЛ возвращается вместе с деньгами
+                if order["role"] in PERSON_ROLES:   # годовой лимит ФЛ и ИП возвращается вместе с деньгами
                     conn.execute(
                         "UPDATE users SET yearly_spent_rub = MAX(yearly_spent_rub - ?, 0) WHERE id = ?", (cost, inv_id))
                 conn.execute("UPDATE orders SET status = 'REFUNDED' WHERE id = ?", (order["id"],))

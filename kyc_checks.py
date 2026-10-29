@@ -115,7 +115,7 @@ def run_checks(conn: sqlite3.Connection, user) -> list[dict]:
         checks.append(_item("Город регистрации в справочнике", a.get("fl_reg_city") in CITIES,
                             a.get("fl_reg_city", ""), "Города нет в справочнике"))
         passport = digits(a.get("fl_passport_num", ""))
-        dup = [n for n in _dupes_json(conn, user["id"], "fl_passport_num", passport)]
+        dup = _dupes_json(conn, user["id"], PASSPORT_KEYS, passport)
         checks.append(_item("Паспорт не используется другими участниками", not dup,
                             "Совпадений нет", "Тот же паспорт у: " + ", ".join(dup), bad="fail"))
         dup = _dupes(conn, user["id"], "phone", user["phone"])
@@ -125,11 +125,45 @@ def run_checks(conn: sqlite3.Connection, user) -> list[dict]:
         checks.append({"title": "Статус инвестора", "status": "ok",
                        "detail": "Квалифицированный — проверьте подтверждающие документы" if user["is_qualified"]
                        else "Неквалифицированный — лимит 600 000 ₽ в год"})
+    elif user["role"] == "IP":
+        checks.append(_item("Контрольная сумма ИНН предпринимателя", inn_valid(inn),
+                            f"ИНН {inn} корректен", f"ИНН {inn} не проходит проверку контрольных цифр"))
+        ogrnip = digits(a.get("ip_ogrnip", ""))
+        checks.append(_item("Контрольная сумма ОГРНИП", ogrn_valid(ogrnip) and ogrnip[:1] == "3",
+                            f"ОГРНИП {ogrnip} корректен", f"ОГРНИП {ogrnip} не проходит проверку контрольной цифры"))
+        checks.append(_item("ОГРНИП и ИНН из одного региона", ogrnip[3:5] == inn[:2] if ogrnip and inn else False,
+                            f"Регион {inn[:2]}", f"ИНН выдан в регионе {inn[:2]}, ИП зарегистрирован в регионе "
+                            f"{ogrnip[3:5]} — уточните, не переезжал ли предприниматель"))
+        try:
+            born = date.fromisoformat(a.get("ip_birth_date", ""))
+            today = date.today()
+            age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+            checks.append(_item("Возраст", age >= 18, f"{age} лет", f"{age} лет — младше 18", bad="fail"))
+        except ValueError:
+            checks.append({"title": "Возраст", "status": "warn", "detail": "Дата рождения не указана"})
+        account, bik = digits(a.get("ip_bank_account", "")), digits(a.get("ip_bank_bik", ""))
+        checks.append(_item("Ключ расчётного счёта по БИК", account_key_valid(account, bik),
+                            "Счёт согласован с БИК", f"Счёт {account} не сходится с БИК {bik}"))
+        checks.append(_item("Счёт индивидуального предпринимателя (40802)", account[:5] == "40802",
+                            f"Счёт {account[:5]}…", f"Счёт начинается с {account[:5]} — у ИП должен быть 40802"))
+        checks.append(_item("Место жительства в справочнике", a.get("ip_reg_city") in CITIES,
+                            a.get("ip_reg_city", ""), "Города нет в справочнике"))
+        passport = digits(a.get("ip_passport_num", ""))
+        dup = _dupes_json(conn, user["id"], PASSPORT_KEYS, passport)
+        checks.append(_item("Паспорт не используется другими участниками", not dup,
+                            "Совпадений нет", "Тот же паспорт у: " + ", ".join(dup), bad="fail"))
+        dup = _dupes(conn, user["id"], "phone", user["phone"])
+        checks.append(_item("Телефон уникален", not dup, user["phone"] or "", "Тот же телефон у: " + ", ".join(dup)))
+        checks.append({"title": "Статус инвестора", "status": "ok",
+                       "detail": "Квалифицированный — проверьте подтверждающие документы" if user["is_qualified"]
+                       else "Неквалифицированный — при покупке ЦФА лимит 600 000 ₽ в год"})
+        checks.append({"title": "Право выпуска ЦФА", "status": "ok",
+                       "detail": "ИП вправе выпускать ЦФА (259-ФЗ, ст. 2 ч. 3); Решение о выпуске подписывает сам предприниматель"})
     else:
         checks.append(_item("Контрольная сумма ИНН организации", inn_valid(inn),
                             f"ИНН {inn} корректен", f"ИНН {inn} не проходит проверку контрольной цифры"))
         ogrn = digits(a.get("ul_ogrn", ""))
-        checks.append(_item("Контрольная сумма ОГРН / ОГРНИП", ogrn_valid(ogrn),
+        checks.append(_item("Контрольная сумма ОГРН", ogrn_valid(ogrn),
                             f"ОГРН {ogrn} корректен", f"ОГРН {ogrn} не проходит проверку контрольной цифры"))
         kpp = digits((a.get("ul_inn_kpp", "") + "/").split("/")[1])
         checks.append(_item("КПП согласован с ИНН (код региона)", kpp[:2] == inn[:2] if kpp and inn else False,
@@ -152,14 +186,19 @@ def run_checks(conn: sqlite3.Connection, user) -> list[dict]:
     return checks
 
 
-def _dupes_json(conn: sqlite3.Connection, user_id: int, key: str, value: str) -> list[str]:
-    """Поиск дублей по полю, которое хранится только в анкете (profile_json)."""
+PASSPORT_KEYS = ("fl_passport_num", "ip_passport_num")   # паспорт физлица и ИП — один и тот же человек
+
+
+def _dupes_json(conn: sqlite3.Connection, user_id: int, keys, value: str) -> list[str]:
+    """Поиск дублей по полю (или нескольким полям), которое хранится только в анкете (profile_json)."""
     if not value:
         return []
+    keys = (keys,) if isinstance(keys, str) else keys
     found = []
     for r in conn.execute("SELECT id, full_name, login, profile_json FROM users WHERE id != ? AND profile_json IS NOT NULL",
                           (user_id,)):
-        if digits(json.loads(r["profile_json"]).get(key, "")) == value:
+        a = json.loads(r["profile_json"])
+        if any(digits(a.get(k, "")) == value for k in keys):
             found.append(f"{r['full_name']} ({r['login']})")
     return found
 

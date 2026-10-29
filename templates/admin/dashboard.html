@@ -23,7 +23,7 @@
     <div class="admin-card__head"><h3>Новые анкеты</h3><a href="{{ url_for('admin.users') }}">Все →</a></div>
     {% for u in pending_users %}
     <a class="admin-list-row" href="{{ url_for('admin.user_detail', user_id=u.id) }}">
-      <span><b>{{ u.full_name }}</b><small>{{ 'Физлицо' if u.role == 'FL' else 'Юрлицо' }} · {{ u.created_at|ddmm }}</small></span>
+      <span><b>{{ u.full_name }}</b><small>{{ u.role|role_full }} · {{ u.created_at|ddmm }}</small></span>
       <span class="badge badge--amber">Проверить</span>
     </a>
     {% else %}<p class="muted">Новых анкет нет</p>{% endfor %}

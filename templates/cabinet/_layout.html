@@ -24,7 +24,7 @@
         {{ nav('operations', 'Операции') }}
         {{ nav('coupons', 'Выплаты по купонам') }}
       </nav>
-      {% if me.role == 'UL' %}
+      {% if me.role in issuer_roles %}
       <div class="sidebar-sub-label">Эмитент</div>
       <nav class="sidebar-nav">
         {{ nav('issuer', 'Мои выпуски') }}

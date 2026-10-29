@@ -23,7 +23,7 @@
         <small id="buy-total" class="field-hint"></small>
       </div>
       <div class="light-field light-field--full">
-        <label>Код подтверждения ({{ 'ПЭП СМС 1234' if me and me.role == 'FL' else 'УКЭП — любой код' }})</label>
+        <label>Код подтверждения ({{ 'ПЭП СМС 1234' if me and me.role in sign_pep_roles else 'УКЭП — любой код' }})</label>
         <input type="text" name="sign_code" placeholder="Введите код подтверждения" required>
       </div>
       <div id="buy-error" class="form-error hidden light-field--full"></div>
@@ -48,6 +48,8 @@
         <select name="wallet_method">
           {% if me and me.role == 'UL' %}
           <option value="deposit">Пополнение по реквизитам номинального счета (для ЮЛ)</option>
+          {% elif me and me.role == 'IP' %}
+          <option value="deposit">Пополнение с расчётного счёта ИП по реквизитам номинального счета</option>
           {% else %}
           <option value="deposit">Пополнение через СБП / SberPay (для ФЛ)</option>
           {% endif %}

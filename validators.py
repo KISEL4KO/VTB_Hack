@@ -43,6 +43,16 @@ HAS_DIGIT_RE = re.compile(r"\d")
 FL_STATUSES = {"unqualified", "qualified"}
 UL_REP_ROLES = {"signer", "viewer"}
 
+# ------------------------------------------------------------------------------
+# Типы участников
+# ------------------------------------------------------------------------------
+ROLE_SHORT = {"FL": "ФЛ", "UL": "ЮЛ", "IP": "ИП", "ADMIN": "Админ"}
+ROLE_FULL = {"FL": "Физическое лицо", "UL": "Юридическое лицо", "IP": "Индивидуальный предприниматель",
+             "ADMIN": "Администратор"}
+ISSUER_ROLES = ("UL", "IP")     # кто может выпускать ЦФА (259-ФЗ, ст. 2 ч. 3: юрлица и ИП)
+PERSON_ROLES = ("FL", "IP")     # физические лица: для неквалифицированных действует лимит 600 000 ₽ в год
+SIGN_PEP_ROLES = ("FL",)        # подписывают заявку кодом из СМС (ПЭП); ЮЛ и ИП — УКЭП
+
 
 def digits(s: str) -> str:
     """Оставляет только цифры: '770-001 12' -> '77000112'."""
@@ -105,6 +115,15 @@ def check_city(value: str) -> str:
     return ""
 
 
+def check_ip_account(value: str) -> str:
+    """Расчётный счёт ИП: 20 цифр, балансовый счёт 40802 (счета индивидуальных предпринимателей)."""
+    if len(value) != 20:
+        return "Расчётный счёт — 20 цифр."
+    if not value.startswith("40802"):
+        return "Счёт ИП начинается с 40802."
+    return ""
+
+
 def check_street(value: str) -> str:
     if len(value) < 5 or not HAS_LETTER_RE.search(value) or not HAS_DIGIT_RE.search(value):
         return "Укажите улицу и номер дома, например: ул. Ленина, д. 1."
@@ -128,7 +147,7 @@ def normalize_phone(value: str) -> str:
 # ------------------------------------------------------------------------------
 def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
     """
-    role — 'FL' или 'UL'; f — словарь полей формы (строки).
+    role — 'FL', 'UL' или 'IP'; f — словарь полей формы (строки).
     Возвращает (clean, errors).
     """
     errors: dict[str, str] = {}
@@ -220,15 +239,91 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
                 is_qualified=1 if status == "qualified" else 0,
             )
 
-    # ---------- 2б. Анкета юридического лица ----------
+    # ---------- 2б. Анкета индивидуального предпринимателя ----------
+    elif role == "IP":
+        fio = " ".join(need("ip_fio", "Укажите ФИО предпринимателя.").split())
+        if fio and not FIO_RE.fullmatch(fio):
+            errors["ip_fio"] = "Фамилия, имя и (при наличии) отчество — только буквы и дефис."
+
+        check("ip_birth_date", need("ip_birth_date", "Укажите дату рождения."), check_birth_date)
+        birth_place = need("ip_birth_place", "Укажите место рождения.")
+        if birth_place and (len(birth_place) < 2 or not HAS_LETTER_RE.search(birth_place)):
+            errors["ip_birth_place"] = "Укажите населённый пункт."
+
+        phone = normalize_phone(need("ip_phone", "Укажите телефон."))
+        if f.get("ip_phone") and not phone:
+            errors["ip_phone"] = "Российский номер: +7 и 10 цифр."
+        email = need("ip_email", "Укажите e-mail.")
+        if email and not EMAIL_RE.fullmatch(email):
+            errors["ip_email"] = "Некорректный e-mail, пример: user@example.ru"
+
+        passport = need("ip_passport_num", "Укажите серию и номер паспорта.")
+        check("ip_passport_num", passport, check_passport)
+        issued = need("ip_passport_issued")
+        if issued and (not DEPT_CODE_RE.search(issued) or len(issued) < 10):
+            errors["ip_passport_issued"] = "Укажите код подразделения (000-000) и кем выдан."
+
+        # У ИП нет юридического адреса: в ЕГРИП и в Решении о выпуске указывается место жительства
+        reg_city = need("ip_reg_city", "Выберите город регистрации.")
+        check("ip_reg_city", reg_city, check_city)
+        reg_street = need("ip_reg_street", "Укажите улицу, дом и квартиру.")
+        check("ip_reg_street", reg_street, check_street)
+
+        inn = digits(need("ip_inn", "Укажите ИНН."))
+        if f.get("ip_inn") and len(inn) != 12:
+            errors["ip_inn"] = "ИНН индивидуального предпринимателя — 12 цифр."
+
+        ogrnip = digits(need("ip_ogrnip", "Укажите ОГРНИП."))
+        if f.get("ip_ogrnip") and len(ogrnip) != 15:
+            errors["ip_ogrnip"] = "ОГРНИП — 15 цифр."
+        elif ogrnip and ogrnip[0] != "3":
+            errors["ip_ogrnip"] = "ОГРНИП начинается с цифры 3."
+
+        reg_date = need("ip_reg_date", "Укажите дату регистрации ИП.")
+        if reg_date:
+            try:
+                if date.fromisoformat(reg_date) > date.today():
+                    errors["ip_reg_date"] = "Дата не может быть в будущем."
+            except ValueError:
+                errors["ip_reg_date"] = "Укажите дату полностью."
+
+        account = digits(need("ip_bank_account", "Укажите расчётный счёт."))
+        check("ip_bank_account", account if f.get("ip_bank_account") else "", check_ip_account)
+        bik = digits(need("ip_bank_bik", "Укажите БИК."))
+        if f.get("ip_bank_bik") and (len(bik) != 9 or not bik.startswith("04")):
+            errors["ip_bank_bik"] = "БИК — 9 цифр и начинается с 04."
+
+        status = f.get("ip_investor_status", "")
+        if status not in FL_STATUSES:
+            errors["ip_investor_status"] = "Выберите статус инвестора."
+
+        if not errors:
+            profile = dict(
+                full_name=f"ИП {fio}",
+                inn=inn,
+                snils_or_ogrn=ogrnip,
+                phone=phone,
+                email=email,
+                passport_or_rep=f"{fmt_passport(passport)}, {issued}",
+                address=f"{reg_city}, {reg_street}",
+                is_qualified=1 if status == "qualified" else 0,
+                bank_account=account,
+                bank_bik=bik,
+            )
+
+    # ---------- 2в. Анкета юридического лица ----------
     else:
         company = " ".join(need("ul_company_name", "Укажите сокращённое наименование.").split())
-        if company and (not COMPANY_RE.fullmatch(company) or len(company) > 120):
-            errors["ul_company_name"] = "Начните с формы собственности: ООО «Ромашка», АО «Альфа», ИП Иванов И. И."
+        if company and re.match(r"(ИП|КФХ)\s", company, re.IGNORECASE):
+            errors["ul_company_name"] = "Индивидуальный предприниматель регистрируется на вкладке «Для ИП»."
+        elif company and (not COMPANY_RE.fullmatch(company) or len(company) > 120):
+            errors["ul_company_name"] = "Начните с формы собственности: ООО «Ромашка», АО «Альфа», ПАО «Бета»."
 
-        ogrn = digits(need("ul_ogrn", "Укажите ОГРН / ОГРНИП."))
-        if f.get("ul_ogrn") and len(ogrn) not in (13, 15):
-            errors["ul_ogrn"] = "ОГРН — 13 цифр, ОГРНИП — 15 цифр."
+        ogrn = digits(need("ul_ogrn", "Укажите ОГРН."))
+        if f.get("ul_ogrn") and len(ogrn) == 15:
+            errors["ul_ogrn"] = "15 цифр — это ОГРНИП. ИП регистрируется на вкладке «Для ИП»."
+        elif f.get("ul_ogrn") and len(ogrn) != 13:
+            errors["ul_ogrn"] = "ОГРН юридического лица — 13 цифр."
 
         inn = kpp = ""
         inn_kpp = need("ul_inn_kpp", "Укажите ИНН и КПП.")
@@ -286,8 +381,8 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
 
     # Полная анкета (все поля формы, кроме паролей) — её сверяет администратор
     anketa = {k: v for k, v in f.items() if k not in ("password", "password2", "login")}
-    if role == "FL" and not errors:
-        anketa["fl_phone"] = profile["phone"]
+    if role in ("FL", "IP") and not errors:
+        anketa[role.lower() + "_phone"] = profile["phone"]
     return {"login": login, "profile": profile, "anketa": anketa}, errors
 
 
@@ -479,16 +574,27 @@ ANKETA_LABELS = {
                                        ("fl_investor_status", "Статус инвестора")]),
     ],
     "UL": [
-        ("Организация", [("ul_company_name", "Сокращённое наименование"), ("ul_ogrn", "ОГРН / ОГРНИП"),
+        ("Организация", [("ul_company_name", "Сокращённое наименование"), ("ul_ogrn", "ОГРН"),
                          ("ul_inn_kpp", "ИНН / КПП")]),
         ("Юридический адрес", [("ul_addr_city", "Город"), ("ul_addr_street", "Улица, дом, офис")]),
         ("Представитель", [("ul_rep_fio", "ФИО и контакты"), ("ul_rep_passport", "Паспорт"),
                            ("ul_rep_inn", "ИНН"), ("ul_rep_role", "Полномочия")]),
         ("Банковские реквизиты", [("ul_bank_account", "Расчётный счёт"), ("ul_bank_bik", "БИК")]),
     ],
+    "IP": [
+        ("Предприниматель", [("ip_fio", "ФИО"), ("ip_birth_date", "Дата рождения"),
+                             ("ip_birth_place", "Место рождения")]),
+        ("Регистрация ИП", [("ip_ogrnip", "ОГРНИП"), ("ip_reg_date", "Дата регистрации"), ("ip_inn", "ИНН")]),
+        ("Контакты", [("ip_phone", "Телефон"), ("ip_email", "E-mail")]),
+        ("Паспорт", [("ip_passport_num", "Серия и номер"), ("ip_passport_issued", "Код подразделения, кем выдан")]),
+        ("Место жительства", [("ip_reg_city", "Город"), ("ip_reg_street", "Улица, дом, квартира")]),
+        ("Банковские реквизиты и статус", [("ip_bank_account", "Расчётный счёт"), ("ip_bank_bik", "БИК"),
+                                           ("ip_investor_status", "Статус инвестора")]),
+    ],
 }
 ANKETA_VALUES = {
     "fl_investor_status": {"unqualified": "Неквалифицированный инвестор", "qualified": "Квалифицированный инвестор"},
+    "ip_investor_status": {"unqualified": "Неквалифицированный инвестор", "qualified": "Квалифицированный инвестор"},
     "ul_rep_role": {"signer": "Право подписи сделок и выпуска ЦФА (УКЭП)", "viewer": "Только просмотр"},
 }
 
@@ -501,7 +607,7 @@ def anketa_rows(role: str, anketa: dict) -> list[tuple[str, list[tuple[str, str]
         for key, label in fields:
             value = anketa.get(key, "") or "—"
             value = ANKETA_VALUES.get(key, {}).get(value, value)
-            if key == "fl_birth_date" and len(value) == 10 and value[4] == "-":
+            if key in ("fl_birth_date", "ip_birth_date", "ip_reg_date") and len(value) == 10 and value[4] == "-":
                 value = f"{value[8:]}.{value[5:7]}.{value[:4]}"
             rows.append((label, value))
         out.append((section, rows))
