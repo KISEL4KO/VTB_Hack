@@ -202,6 +202,24 @@ document.addEventListener('click', async function (e) {
   } catch (err) { if (err.message !== 'auth') toast(err.message); }
 });
 
+// Выплаты эмитента: очередной купон или погашение (с кошелька эмитента всем владельцам)
+document.addEventListener('click', async function (e) {
+  var b = e.target.closest('[data-pay]');
+  if (!b) return;
+  if (!confirm(b.dataset.confirm)) return;
+  b.disabled = true;
+  showError('pay-error', '');
+  try {
+    var r = await api('/api/issues/' + b.dataset.issue + '/' + b.dataset.pay);
+    reloadSoon(b.dataset.pay === 'coupon'
+      ? 'Купон № ' + r.period + ' выплачен: ' + r.total_rub.toLocaleString('ru-RU') + ' ₽ — ' + r.holders + ' владельцам'
+      : 'Выпуск погашен: ' + r.total_rub.toLocaleString('ru-RU') + ' ₽ — ' + r.holders + ' владельцам');
+  } catch (err) {
+    if (err.message !== 'auth') showError('pay-error', err.message);
+    b.disabled = false;
+  }
+});
+
 // ======================================================================
 // ВХОД И РЕГИСТРАЦИЯ
 // ======================================================================
@@ -710,3 +728,20 @@ if (benchForm) {
     if (confirm('Вернуть значения по умолчанию (ЦБ, Росстат, MOEX на октябрь 2026)?')) saveBench({ reset: true });
   });
 }
+
+// ---------- Страница выпуска: вкладки «Аналитика» и «Подробнее» (адрес #details открывает вторую) ----------
+(function () {
+  var tabs = document.querySelectorAll('.issue-tab');
+  if (!tabs.length) return;
+  function show(name, push) {
+    tabs.forEach(function (t) {
+      var on = t.dataset.tab === name;
+      t.classList.toggle('issue-tab--active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.issue-pane').forEach(function (p) { p.classList.toggle('hidden', p.dataset.pane !== name); });
+    if (push) history.replaceState(null, '', name === 'details' ? '#details' : location.pathname + location.search);
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab, true); }); });
+  if (location.hash === '#details') show('details', false);
+})();

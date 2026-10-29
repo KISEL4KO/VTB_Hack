@@ -392,3 +392,32 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
 .ip-only { display: none; }
 .is-ip .ip-only { display: block; }
 @media (max-width: 520px) { .ip-switch { grid-template-columns: 1fr; } }
+
+/* Выплаты эмитента: купоны и погашение */
+.pay-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 4px 0 16px; }
+.pay-table td { vertical-align: top; }
+.pay-table tr.is-next td { background: #f3f8ff; }
+.pay-table tr.pay-redeem td { border-top: 2px solid var(--border-color); }
+.pay-table .btn-primary { white-space: nowrap; padding: 8px 14px; }
+.pay-warn { display: block; margin-top: 6px; color: #b91c1c; font-size: 12px; }
+.pay-note { display: block; max-width: 240px; color: var(--text-secondary); font-size: 12px; line-height: 1.35; }
+.pay-rules { margin-top: 16px; font-size: 13.5px; line-height: 1.5; }
+.pay-rules ul { margin: 8px 0 0; padding-left: 18px; }
+.pay-rules li { margin-bottom: 4px; }
+@media (max-width: 960px) { .pay-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Страница выпуска: вкладки и «Подробнее» */
+.issue-tabs { display: flex; gap: 6px; margin: 18px 0 16px; border-bottom: 1px solid var(--border-color); }
+.issue-tab { appearance: none; border: 0; background: none; padding: 10px 16px; font: inherit; font-size: 15px; font-weight: 700;
+  color: var(--text-secondary); border-bottom: 3px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.issue-tab:hover { color: var(--text-primary, #111827); }
+.issue-tab--active { color: #1f5bd8; border-bottom-color: #1f5bd8; }
+.about-cfa p { margin: 0 0 8px; line-height: 1.55; font-size: 15px; }
+.about-cfa p:last-child { margin-bottom: 0; }
+.dash-sub-h { margin: 16px 0 6px; font-size: 14px; }
+.risk-list { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; }
+.kv-row b.mono { font-weight: 500; text-align: right; }
+.issue-pane[data-pane="details"] > .dash-card + .dash-card,
+.issue-pane[data-pane="details"] > .dash-two + .dash-card { margin-top: 16px; }
+.pay-table td:nth-child(4), .pay-table td:nth-child(5) { white-space: nowrap; }
+.nowrap { white-space: nowrap; }

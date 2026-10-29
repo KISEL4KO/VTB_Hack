@@ -182,7 +182,7 @@ def issues():
             JOIN users u ON u.id = i.issuer_id {where}
             ORDER BY CASE i.status WHEN 'REVIEW' THEN 0 ELSE 1 END, i.id DESC""", args).fetchall()
     counts = {s: conn.execute("SELECT COUNT(*) FROM cfa_issues WHERE status = ?", (s,)).fetchone()[0]
-              for s in ("REVIEW", "REJECTED", "SUBSCRIPTION", "ISSUED", "CANCELLED")}
+              for s in ("REVIEW", "REJECTED", "SUBSCRIPTION", "ISSUED", "CANCELLED", "REDEEMED")}
     return render_template("admin/issues.html", section="issues", rows=rows, status=status, counts=counts)
 
 

@@ -159,6 +159,10 @@ OP_TYPES = {
     "KYC_APPROVE": "Допуск подтверждён",
     "KYC_REJECT": "Отказ в допуске",
     "KYC_BLOCK": "Блокировка доступа",
+    "COUPON_PAY": "Выплата купона владельцам",
+    "COUPON_IN": "Получен купон",
+    "REDEEM_PAY": "Погашение выпуска",
+    "REDEEM_IN": "Погашение ЦФА",
 }
 ADMIN_ACTIONS = {
     "USER_APPROVE": "Допуск участника подтверждён",
@@ -176,6 +180,8 @@ CHAIN_METHODS = {
     "registerIssue": "Регистрация выпуска",
     "subscribe": "Заявка (холд)",
     "finalize": "Закрытие сбора (DvP / возврат)",
+    "payCoupon": "Выплата купона",
+    "redeem": "Погашение выпуска",
 }
 
 
@@ -254,16 +260,21 @@ def reconciliation(conn: sqlite3.Connection) -> list[dict]:
                      "match": ch.call("verified", addr) == (u["status"] == "APPROVED")})
 
     issues = conn.execute(
-        "SELECT * FROM cfa_issues WHERE status IN ('SUBSCRIPTION', 'ISSUED', 'CANCELLED') ORDER BY id").fetchall()
+        "SELECT * FROM cfa_issues WHERE status IN ('SUBSCRIPTION', 'ISSUED', 'CANCELLED', 'REDEEMED') ORDER BY id").fetchall()
     for i in issues:
         on_chain = ch.call("issues", i["id"])
-        status_map = {"SUBSCRIPTION": 1, "ISSUED": 2, "CANCELLED": 3}
+        status_map = {"SUBSCRIPTION": 1, "ISSUED": 2, "CANCELLED": 3, "REDEEMED": 4}
         rows.append({"who": f"Выпуск #{i['id']} {i['title']}", "what": "Заявлено ЦФА",
                      "db": fmt(i["collected_qty"]), "chain": fmt(on_chain[4]), "match": on_chain[4] == i["collected_qty"]})
         rows.append({"who": f"Выпуск #{i['id']} {i['title']}", "what": "Статус выпуска",
                      "db": ISSUE_STATUS[i["status"]][0], "chain": CHAIN_ISSUE_STATUS.get(on_chain[7], "?"),
                      "match": on_chain[7] == status_map[i["status"]]})
-        if i["status"] == "ISSUED":
+        if i["status"] in ("ISSUED", "REDEEMED"):
+            paid = conn.execute("SELECT COUNT(*) FROM cfa_payments WHERE issue_id = ? AND kind = 'COUPON'",
+                                (i["id"],)).fetchone()[0]
+            on_chain_paid = ch.call("couponsPaid", i["id"])
+            rows.append({"who": f"Выпуск #{i['id']} {i['title']}", "what": "Выплачено купонов",
+                         "db": fmt(paid), "chain": fmt(on_chain_paid), "match": paid == on_chain_paid})
             for h in conn.execute(
                     """SELECT p.qty, u.full_name, u.evm_address FROM portfolio_assets p JOIN users u ON u.id = p.user_id
                        WHERE p.issue_id = ?""", (i["id"],)):

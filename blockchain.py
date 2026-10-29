@@ -39,7 +39,7 @@ ARTIFACT_PATH = Path(__file__).parent / "blockchain" / "CFAPlatform.json"
 # Публичный тестовый ключ №0 Anvil/Hardhat — известен всем, годится только для локальной сети.
 ANVIL_DEFAULT_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
-ISSUE_STATUS = {0: "—", 1: "Сбор заявок", 2: "Размещён (DvP)", 3: "Отменён (возврат)"}
+ISSUE_STATUS = {0: "—", 1: "Сбор заявок", 2: "Размещён (DvP)", 3: "Отменён (возврат)", 4: "Погашен"}
 
 CHAIN_SCHEMA_SQL = """
 -- Журнал транзакций EVM: из него при запуске восстанавливается состояние встроенной сети

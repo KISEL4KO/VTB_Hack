@@ -183,6 +183,34 @@ CREATE TABLE IF NOT EXISTS platform_settings (
     updated_by        INTEGER REFERENCES users(id),
     updated_at        TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+
+-- 9. Выплаты по размещённым выпускам: купоны по графику и погашение номинала (с кошелька эмитента)
+CREATE TABLE IF NOT EXISTS cfa_payments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_id          INTEGER NOT NULL REFERENCES cfa_issues(id),
+    kind              TEXT NOT NULL CHECK (kind IN ('COUPON', 'REDEMPTION')),
+    period_no         INTEGER NOT NULL,                           -- № купонного периода; 0 — погашение
+    period_start      TEXT,
+    period_end        TEXT,
+    days              INTEGER NOT NULL DEFAULT 0,
+    pay_date          TEXT NOT NULL,                              -- дата выплаты по графику
+    rate_bp           INTEGER NOT NULL DEFAULT 0,                 -- ставка в сотых долях процента (18,5 % = 1850)
+    amount_total      INTEGER NOT NULL CHECK (amount_total >= 0),
+    holders           INTEGER NOT NULL DEFAULT 0,
+    early             INTEGER NOT NULL DEFAULT 0,                 -- 1 = выплачено раньше даты по графику
+    evm_tx_hash       TEXT,
+    paid_at           TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    UNIQUE (issue_id, kind, period_no)
+);
+
+-- 10. Кому и сколько перечислено по каждой выплате
+CREATE TABLE IF NOT EXISTS cfa_payouts (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    payment_id        INTEGER NOT NULL REFERENCES cfa_payments(id),
+    user_id           INTEGER NOT NULL REFERENCES users(id),
+    qty               INTEGER NOT NULL,
+    amount_rub        INTEGER NOT NULL
+);
 """
 
 
@@ -687,6 +715,215 @@ def finalize_issue_dvp(conn: sqlite3.Connection, issue_id: int, chain=None) -> D
             conn, issue["issuer_id"], "ISSUE_REFUND", 0,
             f"Отмена выпуска «{issue['title']}» (не набран минимум). Деньги разблокированы.", evm)
         return {"result": "CANCELLED", "tx_hash": tx_hash, "evm_tx_hash": evm}
+
+
+# ==============================================================================
+# 7б. ВЫПЛАТЫ ВЛАДЕЛЬЦАМ: КУПОНЫ ПО ГРАФИКУ И ПОГАШЕНИЕ (с кошелька эмитента)
+# ==============================================================================
+# Те же правила, что в смарт-контракте (payCoupon / redeem) и в аналитике (static/analytics.js):
+#   купон владельца = qty × номинал × ставка × дни периода / 365, целые рубли с округлением вниз;
+#   график — от даты закрытия сбора (DvP) шагом 1 или 3 месяца, хвост короче 15 дней сливается с последним периодом.
+COUPON_STEP_MONTHS = {"monthly": 1, "quarterly": 3, "maturity": 0}
+
+
+def _add_months(d: date, n: int) -> date:
+    """31 января + 1 месяц → 28/29 февраля (как в analytics.js)."""
+    y, m = divmod(d.month - 1 + n, 12)
+    y, m = d.year + y, m + 1
+    last = (date(y + (m == 12), m % 12 + 1, 1) - date(y, m, 1)).days
+    return date(y, m, min(d.day, last))
+
+
+def coupon_schedule(issue, start_iso: str | None = None) -> list[dict]:
+    """
+    Купонные периоды выпуска: [{no, start, end, days}]. Начало — дата DvP;
+    для ещё не размещённого выпуска можно передать ожидаемую дату (окончание сбора).
+    """
+    start_iso = start_iso or (issue["finalized_at"] or "")[:10]
+    if not start_iso:
+        return []
+    start = date.fromisoformat(start_iso)
+    maturity = date.fromisoformat(issue["maturity_date"])
+    if maturity <= start:
+        return []
+    period = json.loads(issue["rov_json"]).get("coupon_period", "maturity")
+    step = COUPON_STEP_MONTHS.get(period, 0)
+    ends = []
+    if step:
+        k = 1
+        while True:
+            d = _add_months(start, step * k)
+            if (maturity - d).days < 15:
+                break
+            ends.append(d)
+            k += 1
+    ends.append(maturity)
+    out, prev = [], start
+    for no, end in enumerate(ends, 1):
+        out.append({"no": no, "start": prev.isoformat(), "end": end.isoformat(), "days": (end - prev).days})
+        prev = end
+    return out
+
+
+def rate_bp(issue) -> int:
+    return int(round(float(issue["coupon_rate"]) * 100))
+
+
+def coupon_amount(qty: int, price: int, bp: int, days: int) -> int:
+    """Ровно та же формула, что couponOf в контракте: целочисленное деление вниз."""
+    return qty * price * bp * days // 3650000
+
+
+def _holders(conn, issue_id: int):
+    return conn.execute(
+        """SELECT p.user_id, p.qty, u.full_name, u.evm_address FROM portfolio_assets p JOIN users u ON u.id = p.user_id
+           WHERE p.issue_id = ? AND p.qty > 0 ORDER BY p.user_id""", (issue_id,)).fetchall()
+
+
+def payment_plan(conn: sqlite3.Connection, issue) -> Dict[str, Any]:
+    """
+    План выплат выпуска для эмитента и инвесторов: купонные периоды со статусами, погашение,
+    сколько денег нужно и что разрешено сделать сейчас.
+    """
+    today = date.today().isoformat()
+    paid = {(r["kind"], r["period_no"]): r for r in
+            conn.execute("SELECT * FROM cfa_payments WHERE issue_id = ?", (issue["id"],))}
+    holders = _holders(conn, issue["id"])
+    placed = sum(h["qty"] for h in holders)
+    bp, price = rate_bp(issue), issue["price_per_cfa"]
+    rows, next_no = [], None
+    for p in coupon_schedule(issue):
+        rec = paid.get(("COUPON", p["no"]))
+        total = rec["amount_total"] if rec else sum(coupon_amount(h["qty"], price, bp, p["days"]) for h in holders)
+        state = "paid" if rec else ("overdue" if p["end"] < today else "due" if p["end"] == today else "planned")
+        if not rec and next_no is None:
+            next_no = p["no"]
+        rows.append({**p, "per_cfa": price * bp * p["days"] / 3650000, "total": total, "state": state,
+                     "paid_at": rec["paid_at"] if rec else None, "early": bool(rec and rec["early"]),
+                     "evm_tx_hash": rec["evm_tx_hash"] if rec else None, "is_next": False})
+    for r in rows:
+        r["is_next"] = r["no"] == next_no
+    red = paid.get(("REDEMPTION", 0))
+    rov = json.loads(issue["rov_json"])
+    early_allowed = rov.get("early_redemption") == "yes"
+    redemption = {
+        "date": issue["maturity_date"], "total": red["amount_total"] if red else placed * price,
+        "paid_at": red["paid_at"] if red else None, "evm_tx_hash": red["evm_tx_hash"] if red else None,
+        "state": "paid" if red else ("overdue" if issue["maturity_date"] < today else
+                                     "due" if issue["maturity_date"] == today else "planned"),
+    }
+    # Когда можно погашать: все купоны выплачены и наступила дата погашения
+    # (раньше — только если Решение о выпуске допускает досрочное погашение, раздел 12)
+    block = None
+    if issue["status"] != "ISSUED":
+        block = "Выпуск не находится в обращении."
+    elif next_no is not None:
+        block = "Сначала выплатите все купоны по графику."
+    elif today < issue["maturity_date"] and not early_allowed:
+        block = (f"Дата погашения — {issue['maturity_date'][8:10]}.{issue['maturity_date'][5:7]}."
+                 f"{issue['maturity_date'][:4]}. Досрочное погашение Решением о выпуске не предусмотрено.")
+    redemption["block"] = block
+    redemption["early"] = today < issue["maturity_date"]
+    paid_coupons = sum(r["total"] for r in rows if r["state"] == "paid")
+    return {"coupons": rows, "redemption": redemption, "next_no": next_no, "placed": placed,
+            "holders": len(holders), "paid_coupons": paid_coupons, "early_allowed": early_allowed}
+
+
+def _issuer_issue(conn, issue_id: int, issuer_id: int):
+    issue = conn.execute("SELECT * FROM cfa_issues WHERE id = ?", (issue_id,)).fetchone()
+    if not issue or issue["issuer_id"] != issuer_id:
+        raise ValueError("Выплаты по выпуску проводит только его эмитент.")
+    if issue["status"] != "ISSUED":
+        raise ValueError("Выплаты возможны только по размещённому выпуску, который ещё не погашен.")
+    return issue
+
+
+def _need_money(conn, issuer_id: int, total: int, what: str) -> None:
+    bal = conn.execute("SELECT balance_rub FROM wallets WHERE user_id = ?", (issuer_id,)).fetchone()["balance_rub"]
+    if bal < total:
+        raise ValueError(f"Недостаточно средств на кошельке эмитента для {what}: нужно {_fmt(total)} ₽, "
+                         f"свободно {_fmt(bal)} ₽. Пополните кошелёк на {_fmt(total - bal)} ₽.")
+
+
+def pay_coupon(conn: sqlite3.Connection, issue_id: int, issuer_id: int, chain=None) -> Dict[str, Any]:
+    """Эмитент выплачивает очередной купон: деньги с его кошелька — владельцам ЦФА, в базе и в контракте."""
+    with conn:
+        issue = _issuer_issue(conn, issue_id, issuer_id)
+        plan = payment_plan(conn, issue)
+        if plan["next_no"] is None:
+            raise ValueError("Все купоны по этому выпуску уже выплачены.")
+        period = next(r for r in plan["coupons"] if r["no"] == plan["next_no"])
+        bp, price = rate_bp(issue), issue["price_per_cfa"]
+        holders = _holders(conn, issue_id)
+        parts = [(h, coupon_amount(h["qty"], price, bp, period["days"])) for h in holders]
+        total = sum(a for _, a in parts)
+        _need_money(conn, issuer_id, total, f"купона № {period['no']}")
+
+        early = int(date.today().isoformat() < period["end"])
+        cur = conn.execute(
+            """INSERT INTO cfa_payments (issue_id, kind, period_no, period_start, period_end, days, pay_date, rate_bp,
+                                         amount_total, holders, early)
+               VALUES (?, 'COUPON', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (issue_id, period["no"], period["start"], period["end"], period["days"], period["end"], bp, total,
+             len(holders), early))
+        payment_id = cur.lastrowid
+        conn.execute("UPDATE wallets SET balance_rub = balance_rub - ? WHERE user_id = ?", (total, issuer_id))
+        for h, amount in parts:
+            conn.execute("UPDATE wallets SET balance_rub = balance_rub + ? WHERE user_id = ?", (amount, h["user_id"]))
+            conn.execute("INSERT INTO cfa_payouts (payment_id, user_id, qty, amount_rub) VALUES (?, ?, ?, ?)",
+                         (payment_id, h["user_id"], h["qty"], amount))
+
+        # Блокчейн — последним: если контракт откажет, откатится и всё, что выше
+        evm = _chain_tx(chain, conn, "payCoupon", issue_id, period["no"], bp, period["days"])
+        conn.execute("UPDATE cfa_payments SET evm_tx_hash = ? WHERE id = ?", (evm, payment_id))
+        label = f"купон № {period['no']} по «{issue['title']}» ({period['days']} дн., {issue['coupon_rate']:g} % годовых)"
+        tx_hash = append_ledger_block(conn, issuer_id, "COUPON_PAY", total,
+                                      f"Выплачен {label}: {_fmt(len(holders))} владельцам, {_fmt(total)} ₽"
+                                      + (" — досрочно" if early else ""), evm)
+        for h, amount in parts:
+            append_ledger_block(conn, h["user_id"], "COUPON_IN", amount,
+                                f"Получен {label} за {_fmt(h['qty'])} шт.: {_fmt(amount)} ₽", evm)
+    return {"period": period["no"], "total_rub": total, "holders": len(holders), "early": bool(early),
+            "tx_hash": tx_hash, "evm_tx_hash": evm}
+
+
+def redeem_issue(conn: sqlite3.Connection, issue_id: int, issuer_id: int, chain=None) -> Dict[str, Any]:
+    """Погашение: номинал владельцам с кошелька эмитента, ЦФА списываются, выпуск — «Погашен»."""
+    with conn:
+        issue = _issuer_issue(conn, issue_id, issuer_id)
+        plan = payment_plan(conn, issue)
+        if plan["redemption"]["block"]:
+            raise ValueError(plan["redemption"]["block"])
+        holders = _holders(conn, issue_id)
+        price = issue["price_per_cfa"]
+        total = sum(h["qty"] for h in holders) * price
+        _need_money(conn, issuer_id, total, "погашения")
+
+        early = int(plan["redemption"]["early"])
+        cur = conn.execute(
+            """INSERT INTO cfa_payments (issue_id, kind, period_no, pay_date, amount_total, holders, early)
+               VALUES (?, 'REDEMPTION', 0, ?, ?, ?, ?)""", (issue_id, issue["maturity_date"], total, len(holders), early))
+        payment_id = cur.lastrowid
+        conn.execute("UPDATE wallets SET balance_rub = balance_rub - ? WHERE user_id = ?", (total, issuer_id))
+        for h in holders:
+            amount = h["qty"] * price
+            conn.execute("UPDATE wallets SET balance_rub = balance_rub + ? WHERE user_id = ?", (amount, h["user_id"]))
+            conn.execute("INSERT INTO cfa_payouts (payment_id, user_id, qty, amount_rub) VALUES (?, ?, ?, ?)",
+                         (payment_id, h["user_id"], h["qty"], amount))
+            conn.execute("UPDATE portfolio_assets SET qty = 0, updated_at = datetime('now', 'localtime') "
+                         "WHERE user_id = ? AND issue_id = ?", (h["user_id"], issue_id))
+        conn.execute("UPDATE cfa_issues SET status = 'REDEEMED', updated_at = datetime('now', 'localtime') WHERE id = ?",
+                     (issue_id,))
+
+        evm = _chain_tx(chain, conn, "redeem", issue_id)
+        conn.execute("UPDATE cfa_payments SET evm_tx_hash = ? WHERE id = ?", (evm, payment_id))
+        tx_hash = append_ledger_block(conn, issuer_id, "REDEEM_PAY", total,
+                                      f"Погашен выпуск «{issue['title']}»: {_fmt(len(holders))} владельцам "
+                                      f"{_fmt(total)} ₽" + (" — досрочно" if early else ""), evm)
+        for h in holders:
+            append_ledger_block(conn, h["user_id"], "REDEEM_IN", h["qty"] * price,
+                                f"Погашение «{issue['title']}»: {_fmt(h['qty'])} шт. × {_fmt(price)} ₽", evm)
+    return {"total_rub": total, "holders": len(holders), "early": bool(early), "tx_hash": tx_hash, "evm_tx_hash": evm}
 
 
 # ==============================================================================

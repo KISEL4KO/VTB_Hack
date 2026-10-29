@@ -67,8 +67,8 @@
           <button type="button" class="btn-primary" style="flex: 1;" disabled>Сбор закрыт</button>
           {% endif %}
           <a class="btn-secondary btn-link" href="{{ url_for('issue_page', issue_id=i.id) }}" title="Доходность, сравнение с ОФЗ и вкладами, график выплат, калькулятор">Аналитика</a>
-          <a class="btn-secondary btn-link" href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank"
-             title="Решение о выпуске (PDF), SHA-256 {{ i.doc_hash }}">РоВ</a>
+          <a class="btn-secondary btn-link" href="{{ url_for('issue_page', issue_id=i.id) }}#details"
+             title="Коротко о ЦФА, параметры, график выплат, условия выпуска и кто их исполняет, документы">Подробнее</a>
         </div>
       </article>
       {% else %}

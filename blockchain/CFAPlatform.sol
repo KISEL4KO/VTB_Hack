@@ -15,10 +15,12 @@ pragma solidity ^0.8.24;
  * Жизненный цикл выпуска: registerIssue → subscribe (деньги в холд) → finalize:
  *  • собран минимум → ЦФА инвесторам, рубли эмитенту (DvP);
  *  • не собран      → рубли возвращаются инвесторам.
+ * После размещения: payCoupon (купоны по графику, по порядку) → redeem (погашение номинала).
+ * Деньги на выплаты списываются с кошелька эмитента; если их не хватает — выплата не происходит.
  */
 contract CFAPlatform {
     // ---------------------------------------------------------------- состояние
-    enum Status { None, Subscription, Issued, Cancelled }
+    enum Status { None, Subscription, Issued, Cancelled, Redeemed }
 
     struct Issue {
         address issuer;
@@ -45,6 +47,7 @@ contract CFAPlatform {
     mapping(uint256 => mapping(address => uint256)) public pendingQty;         // ЦФА в заявках (до DvP)
     mapping(uint256 => address[]) private _investors;                          // кто подавал заявки
     mapping(uint256 => uint256) public totalSupply;                            // размещено ЦФА выпуска
+    mapping(uint256 => uint256) public couponsPaid;                            // сколько купонных периодов выплачено
 
     // ---------------------------------------------------------------- события
     event ParticipantUpdated(address indexed who, bool verified, bool qualified);
@@ -56,6 +59,8 @@ contract CFAPlatform {
                      uint256 amount, bytes32 signatureHash);
     event Settled(uint256 indexed issueId, uint256 placedQty, uint256 raisedRub);   // DvP выполнен
     event Refunded(uint256 indexed issueId, uint256 refundedRub);                   // выпуск отменён
+    event CouponPaid(uint256 indexed issueId, uint256 period, uint256 totalRub);     // купон выплачен
+    event Redeemed(uint256 indexed issueId, uint256 qty, uint256 totalRub);         // номинал погашен
 
     // ---------------------------------------------------------------- доступ
     modifier onlyOperator() {
@@ -169,6 +174,51 @@ contract CFAPlatform {
         s.status = Status.Cancelled;
         emit Refunded(issueId, refunded);
         return false;
+    }
+
+    // ---------------------------------------------------------------- выплаты владельцам
+    /// Купон за период: каждому владельцу qty × цена × ставка × дни / 365, с кошелька эмитента.
+    /// rateBp — ставка в сотых долях процента (18,5 % → 1850). Целочисленное деление — вниз до рубля.
+    function couponOf(uint256 issueId, address holder, uint256 rateBp, uint256 periodDays) public view returns (uint256) {
+        return balanceOf[issueId][holder] * issues[issueId].price * rateBp * periodDays / 3650000;
+    }
+
+    function payCoupon(uint256 issueId, uint256 period, uint256 rateBp, uint256 periodDays)
+        external onlyOperator returns (uint256 total)
+    {
+        Issue storage s = issues[issueId];
+        require(s.status == Status.Issued, unicode"Выпуск не размещён или уже погашен");
+        require(period == couponsPaid[issueId] + 1, unicode"Купоны выплачиваются по порядку");
+        address[] storage list = _investors[issueId];
+        for (uint256 i = 0; i < list.length; i++) {
+            total += couponOf(issueId, list[i], rateBp, periodDays);
+        }
+        require(rubBalance[s.issuer] >= total, unicode"Недостаточно средств эмитента для выплаты купона");
+        rubBalance[s.issuer] -= total;
+        for (uint256 i = 0; i < list.length; i++) {
+            rubBalance[list[i]] += couponOf(issueId, list[i], rateBp, periodDays);
+        }
+        couponsPaid[issueId] = period;
+        emit CouponPaid(issueId, period, total);
+    }
+
+    /// Погашение: каждому владельцу qty × номинал с кошелька эмитента, ЦФА списываются (сжигаются).
+    function redeem(uint256 issueId) external onlyOperator returns (uint256 total) {
+        Issue storage s = issues[issueId];
+        require(s.status == Status.Issued, unicode"Выпуск не размещён или уже погашен");
+        total = totalSupply[issueId] * s.price;
+        require(rubBalance[s.issuer] >= total, unicode"Недостаточно средств эмитента для погашения");
+        rubBalance[s.issuer] -= total;
+        address[] storage list = _investors[issueId];
+        for (uint256 i = 0; i < list.length; i++) {
+            uint256 qty = balanceOf[issueId][list[i]];
+            if (qty == 0) continue;
+            balanceOf[issueId][list[i]] = 0;
+            rubBalance[list[i]] += qty * s.price;
+        }
+        emit Redeemed(issueId, totalSupply[issueId], total);
+        totalSupply[issueId] = 0;
+        s.status = Status.Redeemed;
     }
 
     // ---------------------------------------------------------------- чтение

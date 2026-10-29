@@ -3,23 +3,51 @@
 <div class="pane-header-row">
   <div>
     <h2 class="pane-title">Выплаты по купонам</h2>
-    <p class="pane-desc">График и фактический учет полученных купонных доходов и погашений номинала</p>
+    <p class="pane-desc">Купоны и погашения, которые эмитенты перечислили на ваш кошелёк, и ближайшие выплаты по графику</p>
   </div>
 </div>
+
+<h3 class="block-title">Ожидаемые выплаты</h3>
 <div class="ui-table-wrap">
   <table class="ui-table">
-    <thead><tr><th>Выпуск ЦФА</th><th>Дата выплаты</th><th>Ставка (% годовых)</th><th>Сумма выплаты (₽)</th><th>Статус</th></tr></thead>
-    <tbody id="coupons-tbody">
-      {% for c in coupons %}
+    <thead><tr><th>Выпуск ЦФА</th><th>Выплата</th><th>Дата по графику</th><th>Сумма вам</th><th>Статус</th></tr></thead>
+    <tbody>
+      {% for u in upcoming %}
       <tr>
-        <td>{{ c.title }}</td><td>{{ c.maturity_date }}</td><td>{{ c.coupon_rate }}%</td>
-        <td>{{ c.expected_coupon_rub|rub }}</td>
-        <td><span class="badge badge--{{ 'amber' if c.status == 'ISSUED' else 'blue' }}">{{ 'Ожидается' if c.status == 'ISSUED' else 'Выплачено' }}</span></td>
+        <td><a href="{{ url_for('issue_page', issue_id=u.issue_id) }}#details">{{ u.title }}</a></td>
+        <td>{{ u.what }}</td><td>{{ u.date|ddmm }}</td><td>{{ u.amount|rub }}</td>
+        <td>{% if u.state == 'overdue' %}<span class="badge badge--red">Просрочено эмитентом</span>
+            {% elif u.state == 'due' %}<span class="badge badge--amber">Сегодня</span>
+            {% else %}<span class="badge badge--blue">Ожидается</span>{% endif %}</td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="empty-cell">Купонных выплат пока нет</td></tr>
+      <tr><td colspan="5" class="empty-cell">Нет размещённых ЦФА с предстоящими выплатами</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+<h3 class="block-title">Получено</h3>
+<div class="ui-table-wrap">
+  <table class="ui-table">
+    <thead><tr><th>Дата</th><th>Выпуск ЦФА</th><th>Выплата</th><th>ЦФА, шт.</th><th>Сумма</th><th>Транзакция</th></tr></thead>
+    <tbody>
+      {% for r in received %}
+      <tr>
+        <td class="nowrap">{{ r.paid_at[:10]|ddmm }}</td>
+        <td><a href="{{ url_for('issue_page', issue_id=r.issue_id) }}#details">{{ r.title }}</a></td>
+        <td>{% if r.kind == 'COUPON' %}Купон № {{ r.period_no }}<br><small>{{ r.period_start|ddmm }} — {{ r.period_end|ddmm }},
+            {{ r.days }} дн., {{ ('%.2f' % r.coupon_rate)|replace('.', ',') }} %{{ ', досрочно' if r.early }}</small>
+            {% else %}Погашение номинала{{ ' (досрочно)' if r.early }}{% endif %}</td>
+        <td>{{ r.qty|num }}</td>
+        <td class="nowrap"><b>{{ r.amount_rub|rub }}</b></td>
+        <td><span class="mono" title="{{ r.evm_tx_hash or '' }}">{{ r.evm_tx_hash|short_hash if r.evm_tx_hash else '—' }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">Купонных выплат пока не было</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="viz-note">С купонов удерживается НДФЛ 13 % — в прототипе налог не удерживается автоматически, суммы показаны до налога.</p>
 {% endblock %}

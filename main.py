@@ -115,7 +115,8 @@ def home():
 
 @app.route("/issues/<int:issue_id>")
 def issue_page(issue_id):
-    """Аналитика выпуска: доходность, сравнение с ОФЗ и вкладами, график выплат, калькулятор, спрос, оценка."""
+    """Страница выпуска: вкладка «Аналитика» (доходность, сравнения, калькулятор, оценка)
+    и вкладка «Подробнее» (коротко о ЦФА, параметры, график выплат, условия и кто их исполняет, документы)."""
     conn = get_db()
     issue = conn.execute("""SELECT i.*, u.full_name AS issuer_name FROM cfa_issues i JOIN users u ON u.id = i.issuer_id
                             WHERE i.id = ?""", (issue_id,)).fetchone()
@@ -125,9 +126,22 @@ def issue_page(issue_id):
     owner = me and (me["role"] == "ADMIN" or me["id"] == issue["issuer_id"])
     if issue["status"] not in PUBLIC_STATUSES and not owner:
         abort(404)
-    return render_template("issue_page.html", issue=issue, payload=issue_payload(conn, issue),
+    issuer = conn.execute("SELECT * FROM users WHERE id = ?", (issue["issuer_id"],)).fetchone()
+    # Вкладка «Подробнее»: фактический план выплат для размещённого выпуска или ожидаемый — для остальных
+    if issue["status"] in ("ISSUED", "REDEEMED"):
+        plan = db.payment_plan(conn, issue)
+        schedule, actual = plan["coupons"], True
+    else:
+        plan, actual = None, False
+        price, bp = issue["price_per_cfa"], db.rate_bp(issue)
+        schedule = [{**p, "per_cfa": price * bp * p["days"] / 3650000, "state": "planned"}
+                    for p in db.coupon_schedule(issue, issue["placement_end"])]
+    ch = chain()
+    return render_template("issue_page.html", issue=issue, issuer=issuer, payload=issue_payload(conn, issue),
                            bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]),
-                           periods=validators.ROV_COUPON_PERIODS, payments=validators.ROV_PAYMENT)
+                           periods=validators.ROV_COUPON_PERIODS, payments=validators.ROV_PAYMENT,
+                           risks_all=validators.ROV_RISKS, plan=plan, schedule=schedule, actual=actual,
+                           chain_address=ch.address if ch and ch.enabled else None)
 
 
 @app.route("/login")
@@ -203,12 +217,30 @@ def cabinet_tab(tab):
             WHERE o.user_id = ? ORDER BY o.id DESC
             """, (uid,)).fetchall()
     elif tab == "coupons":
-        ctx["coupons"] = conn.execute(
+        # Полученные выплаты (купоны и погашения) — фактически перечисленные эмитентом
+        ctx["received"] = conn.execute(
             """
-            SELECT p.*, i.title, i.coupon_rate, i.maturity_date, i.status
-            FROM portfolio_assets p JOIN cfa_issues i ON i.id = p.issue_id
-            WHERE p.user_id = ? AND p.qty > 0 ORDER BY i.maturity_date
+            SELECT po.amount_rub, po.qty, pa.kind, pa.period_no, pa.period_start, pa.period_end, pa.days, pa.paid_at,
+                   pa.early, pa.evm_tx_hash, i.id AS issue_id, i.title, i.coupon_rate
+            FROM cfa_payouts po JOIN cfa_payments pa ON pa.id = po.payment_id JOIN cfa_issues i ON i.id = pa.issue_id
+            WHERE po.user_id = ? ORDER BY pa.paid_at DESC, pa.id DESC
             """, (uid,)).fetchall()
+        # Ожидаемые: следующие периоды по выпускам в портфеле, по текущему количеству ЦФА
+        upcoming = []
+        for h in conn.execute(
+                """SELECT p.qty, i.* FROM portfolio_assets p JOIN cfa_issues i ON i.id = p.issue_id
+                   WHERE p.user_id = ? AND p.qty > 0 AND i.status = 'ISSUED'""", (uid,)):
+            plan = db.payment_plan(conn, h)
+            bp = db.rate_bp(h)
+            for c in plan["coupons"]:
+                if c["state"] != "paid":
+                    upcoming.append({"issue_id": h["id"], "title": h["title"], "what": f"Купон № {c['no']}",
+                                     "date": c["end"], "amount": db.coupon_amount(h["qty"], h["price_per_cfa"], bp, c["days"]),
+                                     "state": c["state"]})
+            upcoming.append({"issue_id": h["id"], "title": h["title"], "what": "Погашение номинала",
+                             "date": h["maturity_date"], "amount": h["qty"] * h["price_per_cfa"],
+                             "state": plan["redemption"]["state"]})
+        ctx["upcoming"] = sorted(upcoming, key=lambda r: r["date"])
     elif tab == "issuer":
         ctx["my_issues"] = conn.execute(
             "SELECT * FROM cfa_issues WHERE issuer_id = ? ORDER BY id DESC", (uid,)).fetchall()
@@ -271,6 +303,24 @@ def issuer_edit(issue_id):
     rov = json.loads(issue["rov_json"])
     rov = {k: ("" if v is None else v) for k, v in rov.items()}
     return render_template("cabinet/issuer_form.html", tab="issuer", rov=rov, issue=issue, **_rov_choices(user["id"], issue_id))
+
+
+@app.route("/cabinet/issuer/<int:issue_id>/payments")
+def issuer_payments(issue_id):
+    """Эмитент: график купонов и погашения, выплата с кошелька эмитента."""
+    user, resp = _issuer_or_redirect()
+    if resp:
+        return resp
+    conn = get_db()
+    issue = conn.execute("SELECT * FROM cfa_issues WHERE id = ? AND issuer_id = ?", (issue_id, user["id"])).fetchone()
+    if not issue:
+        abort(404)
+    if issue["status"] not in ("ISSUED", "REDEEMED"):
+        return redirect(url_for("cabinet_tab", tab="issuer"))
+    wallet = conn.execute("SELECT * FROM wallets WHERE user_id = ?", (user["id"],)).fetchone()
+    return render_template("cabinet/issuer_payments.html", tab="issuer", issue=issue, wallet=wallet,
+                           plan=db.payment_plan(conn, issue), rov=json.loads(issue["rov_json"]),
+                           periods=validators.ROV_COUPON_PERIODS, today_iso=date.today().isoformat())
 
 
 def _ip_prefill(user) -> dict:
@@ -552,6 +602,26 @@ def api_finalize(issue_id):
         return json_error("Закрыть сбор может только эмитент этого выпуска.", 403)
     try:
         return jsonify({**db.finalize_issue_dvp(conn, issue_id, chain=chain()), "status": "success"})
+    except ValueError as e:
+        return json_error(str(e))
+
+
+@app.route("/api/issues/<int:issue_id>/coupon", methods=["POST"])
+@api_approved_required
+def api_pay_coupon(issue_id):
+    """Эмитент выплачивает очередной купон владельцам ЦФА со своего кошелька."""
+    try:
+        return jsonify({**db.pay_coupon(get_db(), issue_id, session["user_id"], chain=chain()), "status": "success"})
+    except ValueError as e:
+        return json_error(str(e))
+
+
+@app.route("/api/issues/<int:issue_id>/redeem", methods=["POST"])
+@api_approved_required
+def api_redeem(issue_id):
+    """Эмитент погашает выпуск: номинал владельцам со своего кошелька, ЦФА списываются."""
+    try:
+        return jsonify({**db.redeem_issue(get_db(), issue_id, session["user_id"], chain=chain()), "status": "success"})
     except ValueError as e:
         return json_error(str(e))
 

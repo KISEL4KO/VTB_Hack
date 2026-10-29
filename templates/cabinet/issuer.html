@@ -17,6 +17,7 @@
   <li><b>2. Проверка</b><span>администратор сверяет документ и одобряет или возвращает на доработку</span></li>
   <li><b>3. Сбор заявок</b><span>выпуск на витрине и в смарт-контракте, деньги инвесторов в холде</span></li>
   <li><b>4. DvP</b><span>закрываете сбор — ЦФА инвесторам, деньги вам одной транзакцией</span></li>
+  <li><b>5. Выплаты</b><span>купоны по графику и погашение номинала с вашего кошелька — всем владельцам сразу</span></li>
 </ol>
 
 <div class="ui-table-wrap">
@@ -38,13 +39,15 @@
                   data-confirm="{{ 'Закрыть сбор и выполнить расчёт DvP?' if i.collected_qty >= i.min_qty else 'Минимум не набран — выпуск будет отменён, деньги вернутся инвесторам. Продолжить?' }}">
             Закрыть сбор
           </button>
+          {% elif i.status in ('ISSUED', 'REDEEMED') %}
+          <a class="btn-secondary btn-link" href="{{ url_for('issuer_payments', issue_id=i.id) }}">{{ 'Купоны и погашение' if i.status == 'ISSUED' else 'История выплат' }}</a>
           {% elif i.status in ('REVIEW', 'REJECTED') %}
           <a class="btn-secondary btn-link" href="{{ url_for('issuer_edit', issue_id=i.id) }}">{{ 'Исправить' if i.status == 'REJECTED' else 'Изменить' }}</a>
           {% else %}—{% endif %}
         </td>
         <td class="doc-links">
           <a href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank">РоВ (PDF)</a>
-          {% if i.status in ('ISSUED', 'CANCELLED') %}
+          {% if i.status in ('ISSUED', 'CANCELLED', 'REDEEMED') %}
           <a href="{{ url_for('doc_results', issue_id=i.id) }}" target="_blank">Итоги выпуска</a>
           {% endif %}
           {% if i.status == 'ISSUED' %}
