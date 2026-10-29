@@ -1,0 +1,16 @@
+# Сторож выплат: раз в минуту выплачивает наступившие купоны и погашения (keeper.py).
+# Отдельный процесс; сайт подхватывает его транзакции из журнала evm_transactions сам.
+[Unit]
+Description=CFA payout keeper
+After=network.target cfa-web.service
+
+[Service]
+User=__APP_USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=/etc/cfa.env
+ExecStart=__APP_DIR__/.venv/bin/flask --app main keeper --loop 60
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

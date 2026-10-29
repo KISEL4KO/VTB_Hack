@@ -1,0 +1,16 @@
+# Сайт платформы ЦФА: gunicorn на 127.0.0.1:8000, снаружи его открывает nginx.
+# Один процесс: встроенная EVM живёт в памяти процесса, несколько воркеров были бы лишними копиями цепочки.
+[Unit]
+Description=CFA platform web (gunicorn)
+After=network.target
+
+[Service]
+User=__APP_USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=/etc/cfa.env
+ExecStart=__APP_DIR__/.venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:8000 --timeout 120 --access-logfile - main:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
