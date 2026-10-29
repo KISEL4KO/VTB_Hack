@@ -734,15 +734,11 @@ def _add_months(d: date, n: int) -> date:
     return date(y, m, min(d.day, last))
 
 
-def coupon_schedule(issue, start_iso: str | None = None) -> list[dict]:
-    """
-    Купонные периоды выпуска: [{no, start, end, days}]. Начало — дата DvP;
-    для ещё не размещённого выпуска можно передать ожидаемую дату (окончание сбора).
-    """
-    start_iso = start_iso or (issue["finalized_at"] or "")[:10]
-    if not start_iso:
+def coupon_schedule(issue) -> list[dict]:
+    """Купонные периоды размещённого выпуска: [{no, start, end, days}]. Начало — дата DvP."""
+    if not issue["finalized_at"]:
         return []
-    start = date.fromisoformat(start_iso)
+    start = date.fromisoformat(issue["finalized_at"][:10])
     maturity = date.fromisoformat(issue["maturity_date"])
     if maturity <= start:
         return []

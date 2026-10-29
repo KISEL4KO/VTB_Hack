@@ -115,8 +115,7 @@ def home():
 
 @app.route("/issues/<int:issue_id>")
 def issue_page(issue_id):
-    """Страница выпуска: вкладка «Аналитика» (доходность, сравнения, калькулятор, оценка)
-    и вкладка «Подробнее» (коротко о ЦФА, параметры, график выплат, условия и кто их исполняет, документы)."""
+    """Аналитика выпуска: доходность, сравнение с ОФЗ и вкладами, график выплат, калькулятор, спрос, оценка."""
     conn = get_db()
     issue = conn.execute("""SELECT i.*, u.full_name AS issuer_name FROM cfa_issues i JOIN users u ON u.id = i.issuer_id
                             WHERE i.id = ?""", (issue_id,)).fetchone()
@@ -126,22 +125,8 @@ def issue_page(issue_id):
     owner = me and (me["role"] == "ADMIN" or me["id"] == issue["issuer_id"])
     if issue["status"] not in PUBLIC_STATUSES and not owner:
         abort(404)
-    issuer = conn.execute("SELECT * FROM users WHERE id = ?", (issue["issuer_id"],)).fetchone()
-    # Вкладка «Подробнее»: фактический план выплат для размещённого выпуска или ожидаемый — для остальных
-    if issue["status"] in ("ISSUED", "REDEEMED"):
-        plan = db.payment_plan(conn, issue)
-        schedule, actual = plan["coupons"], True
-    else:
-        plan, actual = None, False
-        price, bp = issue["price_per_cfa"], db.rate_bp(issue)
-        schedule = [{**p, "per_cfa": price * bp * p["days"] / 3650000, "state": "planned"}
-                    for p in db.coupon_schedule(issue, issue["placement_end"])]
-    ch = chain()
-    return render_template("issue_page.html", issue=issue, issuer=issuer, payload=issue_payload(conn, issue),
-                           bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]),
-                           periods=validators.ROV_COUPON_PERIODS, payments=validators.ROV_PAYMENT,
-                           risks_all=validators.ROV_RISKS, plan=plan, schedule=schedule, actual=actual,
-                           chain_address=ch.address if ch and ch.enabled else None)
+    return render_template("issue_page.html", issue=issue, payload=issue_payload(conn, issue),
+                           bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]))
 
 
 @app.route("/login")

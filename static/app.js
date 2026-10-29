@@ -729,19 +729,3 @@ if (benchForm) {
   });
 }
 
-// ---------- Страница выпуска: вкладки «Аналитика» и «Подробнее» (адрес #details открывает вторую) ----------
-(function () {
-  var tabs = document.querySelectorAll('.issue-tab');
-  if (!tabs.length) return;
-  function show(name, push) {
-    tabs.forEach(function (t) {
-      var on = t.dataset.tab === name;
-      t.classList.toggle('issue-tab--active', on);
-      t.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    document.querySelectorAll('.issue-pane').forEach(function (p) { p.classList.toggle('hidden', p.dataset.pane !== name); });
-    if (push) history.replaceState(null, '', name === 'details' ? '#details' : location.pathname + location.search);
-  }
-  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab, true); }); });
-  if (location.hash === '#details') show('details', false);
-})();

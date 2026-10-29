@@ -26,12 +26,7 @@
     <div class="issue-hero__score" data-k="score" aria-live="polite"></div>
   </section>
 
-  <nav class="issue-tabs" role="tablist" aria-label="Разделы выпуска">
-    <button type="button" class="issue-tab issue-tab--active" role="tab" data-tab="analytics" aria-selected="true">Аналитика</button>
-    <button type="button" class="issue-tab" role="tab" data-tab="details" aria-selected="false">Подробнее</button>
-  </nav>
-
-  <div id="issue-dash" class="issue-pane" data-pane="analytics">
+  <div id="issue-dash">
     <div class="kpi-grid kpi-grid--3" data-k="kpi"></div>
 
     <div class="dash-two">
@@ -87,114 +82,6 @@
       <p class="viz-note">Ориентиры на {{ bench.as_of|ddmm }}: ключевая ставка {{ bench.key_rate }} %, вклады {{ bench.deposit_rate }} %, инфляция {{ bench.inflation }} %. Источники: {{ bench.sources }}.</p>
     </details>
     <p class="viz-note">Аналитика — модель для сравнения выпусков между собой и с альтернативами, а не инвестиционная рекомендация. Доходность ЦФА не гарантирована, вложения не застрахованы АСВ.</p>
-  </div>
-
-  <div class="issue-pane hidden" data-pane="details">
-    {% set kind = 'индивидуальному предпринимателю' if issuer.role == 'IP' else 'компании' %}
-    <div class="dash-card about-cfa">
-      <h3>Коротко об этом ЦФА</h3>
-      <p>Это цифровое денежное требование к {{ kind }} <b>{{ issue.issuer_name }}</b> — по сути цифровая облигация.
-        Вы платите <b>{{ issue.price_per_cfa|rub }}</b> за 1 ЦФА, эмитент платит <b>{{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} % годовых</b>
-        {{ periods.get(rov.coupon_period, '') }} и <b>{{ issue.maturity_date|ddmm }}</b> возвращает номинал.</p>
-      <p>{% if issue.status == 'SUBSCRIPTION' %}Сейчас идёт сбор заявок до {{ issue.placement_end|ddmm }}. Деньги заявки замораживаются;
-        если к закрытию сбора наберётся не меньше {{ issue.min_qty|num }} ЦФА — вы получите ЦФА, если нет — деньги вернутся.
-        {% elif issue.status == 'ISSUED' %}Выпуск размещён {{ issue.finalized_at[:10]|ddmm }}: ЦФА у владельцев, эмитент выплачивает купоны по графику ниже.
-        {% elif issue.status == 'REDEEMED' %}Выпуск погашен: владельцы получили номинал, ЦФА списаны.
-        {% elif issue.status == 'CANCELLED' %}Выпуск не состоялся — минимум не набран, деньги вернулись инвесторам.
-        {% else %}Выпуск ещё не опубликован: Решение о выпуске проверяет администратор.{% endif %}
-        {% if rov.collateral == 'yes' %}Есть обеспечение: {{ rov.collateral_desc }}.{% else %}Обеспечения нет — вернуть деньги можно только за счёт эмитента.{% endif %}
-        Доходность не гарантирована, вложения не застрахованы АСВ.</p>
-    </div>
-
-    <div class="dash-two">
-      <div class="dash-card">
-        <h3>Параметры выпуска</h3>
-        <div class="kv-row"><span>Эмитент</span><b>{{ issue.issuer_name }}</b></div>
-        <div class="kv-row"><span>{{ 'ИНН / ОГРНИП' if issuer.role == 'IP' else 'ИНН / ОГРН, КПП' }}</span><b>{{ issuer.inn }} / {{ issuer.snils_or_ogrn }}</b></div>
-        <div class="kv-row"><span>Номинал и цена 1 ЦФА</span><b>{{ issue.price_per_cfa|rub }}</b></div>
-        <div class="kv-row"><span>Купон</span><b>{{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} %, {{ periods.get(rov.coupon_period, '') }}</b></div>
-        <div class="kv-row"><span>Объём выпуска</span><b>{{ issue.min_qty|num }} — {{ issue.max_qty|num }} шт. ({{ (issue.price_per_cfa * issue.max_qty)|rub_short }} максимум)</b></div>
-        <div class="kv-row"><span>Собрано / размещено</span><b>{{ issue.collected_qty|num }} шт.</b></div>
-        <div class="kv-row"><span>Сбор заявок</span><b>{{ issue.placement_start|ddmm }} — {{ issue.placement_end|ddmm }}</b></div>
-        <div class="kv-row"><span>Погашение</span><b>{{ issue.maturity_date|ddmm }}</b></div>
-        <div class="kv-row"><span>Кому доступен</span><b>{{ 'только квалифицированным инвесторам' if issue.only_qual else 'всем допущенным участникам' }}</b></div>
-      </div>
-      <div class="dash-card">
-        <h3>Документ и блокчейн</h3>
-        <div class="kv-row"><span>Решение о выпуске</span><b><a href="{{ url_for('doc_decision', issue_id=issue.id) }}" target="_blank">открыть PDF</a></b></div>
-        <div class="kv-row"><span>SHA-256 документа</span><b class="mono">{{ issue.doc_hash }}</b></div>
-        <div class="kv-row"><span>Смарт-контракт</span><b class="mono">{{ chain_address or 'блокчейн выключен' }}</b></div>
-        <div class="kv-row"><span>Регистрация выпуска</span><b class="mono">{{ issue.evm_tx_hash or '—' }}</b></div>
-        <h3 class="dash-sub-h">Риски, которые несёт инвестор</h3>
-        <ul class="risk-list">
-          {% for r in rov.risks %}<li>{{ risks_all.get(r, r) }}</li>{% endfor %}
-          {% if rov.risks_extra %}<li>{{ rov.risks_extra }}</li>{% endif %}
-        </ul>
-      </div>
-    </div>
-
-    <div class="dash-card">
-      <h3>{{ 'График выплат и что уже выплачено' if actual else 'Ожидаемый график выплат' }}</h3>
-      <p class="dash-card__sub">{% if actual %}Купоны начисляются с даты размещения {{ issue.finalized_at[:10]|ddmm }}. Выплаты идут с кошелька эмитента всем владельцам одной транзакцией.
-        {% else %}Предварительно: купоны начнут начисляться с даты закрытия сбора (ожидается {{ issue.placement_end|ddmm }}).{% endif %}</p>
-      <div class="ui-table-wrap">
-        <table class="ui-table">
-          <thead><tr><th>№</th><th>Период</th><th>Дата выплаты</th><th>На 1 ЦФА</th><th>Статус</th></tr></thead>
-          <tbody>
-            {% for c in schedule %}
-            <tr><td>{{ c.no }}</td><td>{{ c.start|ddmm }} — {{ c.end|ddmm }} <small>({{ c.days }} дн.)</small></td><td>{{ c.end|ddmm }}</td>
-              <td>{{ ('%.2f' % c.per_cfa)|replace('.', ',') }} ₽</td>
-              <td>{% if c.state == 'paid' %}<span class="badge badge--green">Выплачен {{ c.paid_at[:10]|ddmm }}</span>
-                  {% elif c.state == 'overdue' %}<span class="badge badge--red">Просрочен</span>
-                  {% else %}<span class="badge badge--blue">{{ 'По графику' if actual else 'Ожидается' }}</span>{% endif %}</td></tr>
-            {% endfor %}
-            <tr><td>—</td><td colspan="2"><b>Погашение номинала</b> {{ issue.maturity_date|ddmm }}</td><td>{{ issue.price_per_cfa|rub }}</td>
-              <td>{% if plan and plan.redemption.state == 'paid' %}<span class="badge badge--green">Погашено {{ plan.redemption.paid_at[:10]|ddmm }}</span>
-                  {% elif plan and plan.redemption.state == 'overdue' %}<span class="badge badge--red">Просрочено</span>
-                  {% else %}<span class="badge badge--blue">{{ 'По графику' if actual else 'Ожидается' }}</span>{% endif %}</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="dash-card">
-      <h3>Условия выпуска и как они исполняются</h3>
-      <p class="dash-card__sub">Часть условий исполняет смарт-контракт, часть проверяет сервер платформы, остальное — обязательства
-        эмитента, закреплённые в Решении о выпуске. SHA-256 документа записан в контракт, поэтому изменить условия задним числом нельзя.</p>
-      <div class="ui-table-wrap">
-        <table class="ui-table cond-table">
-          <thead><tr><th>Раздел</th><th>Условие</th><th>Значение</th><th>Кто исполняет</th></tr></thead>
-          <tbody>
-            {% set SC = '<span class="badge badge--blue">смарт-контракт</span>' %}
-            {% set PL = '<span class="badge badge--green">платформа</span>' %}
-            {% set EM = '<span class="badge badge--amber">обязательство эмитента</span>' %}
-            <tr><td>4, 7</td><td>Выпуск состоялся, если собран минимум</td><td>{{ issue.min_qty|num }} шт.</td>
-              <td>{{ SC|safe }} <small>finalize: собрано не меньше минимума — ЦФА инвесторам, деньги эмитенту (DvP); меньше — возврат всем</small></td></tr>
-            <tr><td>4</td><td>Максимальный объём</td><td>{{ issue.max_qty|num }} шт.</td>
-              <td>{{ SC|safe }} <small>subscribe не примет заявку сверх объёма</small></td></tr>
-            <tr><td>5</td><td>Цена 1 ЦФА</td><td>{{ issue.price_per_cfa|rub }}</td>
-              <td>{{ SC|safe }} <small>в холд уходит ровно количество × цена</small></td></tr>
-            <tr><td>8</td><td>Способ оплаты</td><td>{{ payments.get(rov.payment_method, '—') }}</td>
-              <td>{{ SC|safe }} <small>цифровые рубли блокируются в контракте до закрытия сбора</small></td></tr>
-            <tr><td>10</td><td>Круг лиц</td><td>{{ 'только квалифицированные' if issue.only_qual else 'все участники' }}</td>
-              <td>{{ SC|safe }} {{ PL|safe }} <small>белый список и флаг квалификации — в контракте, лимит 600 000 ₽ — на платформе</small></td></tr>
-            <tr><td>6</td><td>Период размещения</td><td>{{ issue.placement_start|ddmm }} — {{ issue.placement_end|ddmm }}</td>
-              <td>{{ PL|safe }} <small>заявки принимаются только в эти даты</small></td></tr>
-            <tr><td>4</td><td>Размер одной заявки</td><td>от {{ issue.min_order_qty|num }}{% if issue.max_order_qty %} до {{ issue.max_order_qty|num }}{% endif %} шт.</td>
-              <td>{{ PL|safe }}</td></tr>
-            <tr><td>3</td><td>Купоны и погашение</td><td>{{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} %, {{ periods.get(rov.coupon_period, '') }}; погашение {{ issue.maturity_date|ddmm }}</td>
-              <td>{{ EM|safe }} {{ SC|safe }} <small>эмитент запускает выплату, контракт списывает деньги с его кошелька и зачисляет всем владельцам; не хватает денег — выплата не проходит и становится просроченной</small></td></tr>
-            <tr><td>11</td><td>Выкуп эмитентом</td><td>{{ rov.buyback_terms if rov.buyback == 'yes' else 'не предусмотрен' }}</td><td>{{ EM|safe }}</td></tr>
-            <tr><td>12</td><td>Обеспечение</td><td>{{ rov.collateral_desc if rov.collateral == 'yes' else 'не предусмотрено' }}</td>
-              <td>{{ EM|safe }} <small>{{ 'залог оформляется договором вне платформы' if rov.collateral == 'yes' else '' }}</small></td></tr>
-            <tr><td>12</td><td>Досрочное погашение</td><td>{{ 'допускается' if rov.early_redemption == 'yes' else 'не допускается' }}</td>
-              <td>{{ PL|safe }} <small>{{ 'эмитент может погасить раньше даты' if rov.early_redemption == 'yes' else 'платформа не даст погасить раньше даты погашения' }}</small></td></tr>
-            <tr><td>9, 12</td><td>Ответственность и споры</td><td>{{ rov.disputes|truncate(90) }}</td>
-              <td>{{ EM|safe }} <small>претензия эмитенту, затем суд</small></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
   </div>
 
 </main>

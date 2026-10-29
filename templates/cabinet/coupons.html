@@ -14,7 +14,7 @@
     <tbody>
       {% for u in upcoming %}
       <tr>
-        <td><a href="{{ url_for('issue_page', issue_id=u.issue_id) }}#details">{{ u.title }}</a></td>
+        <td><a href="{{ url_for('issue_page', issue_id=u.issue_id) }}">{{ u.title }}</a></td>
         <td>{{ u.what }}</td><td>{{ u.date|ddmm }}</td><td>{{ u.amount|rub }}</td>
         <td>{% if u.state == 'overdue' %}<span class="badge badge--red">Просрочено эмитентом</span>
             {% elif u.state == 'due' %}<span class="badge badge--amber">Сегодня</span>
@@ -35,7 +35,7 @@
       {% for r in received %}
       <tr>
         <td class="nowrap">{{ r.paid_at[:10]|ddmm }}</td>
-        <td><a href="{{ url_for('issue_page', issue_id=r.issue_id) }}#details">{{ r.title }}</a></td>
+        <td><a href="{{ url_for('issue_page', issue_id=r.issue_id) }}">{{ r.title }}</a></td>
         <td>{% if r.kind == 'COUPON' %}Купон № {{ r.period_no }}<br><small>{{ r.period_start|ddmm }} — {{ r.period_end|ddmm }},
             {{ r.days }} дн., {{ ('%.2f' % r.coupon_rate)|replace('.', ',') }} %{{ ', досрочно' if r.early }}</small>
             {% else %}Погашение номинала{{ ' (досрочно)' if r.early }}{% endif %}</td>

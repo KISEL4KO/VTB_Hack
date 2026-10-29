@@ -369,12 +369,6 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
   .rov-dash { position: static; max-height: none; order: -1; }
 }
 
-/* Условия выпуска и кто их исполняет (страница выпуска) */
-.cond-table td { vertical-align: top; }
-.cond-table td:first-child { white-space: nowrap; color: #6b7280; }
-.cond-table td:last-child small { display: block; margin-top: 4px; color: #6b7280; line-height: 1.35; }
-.cond-table .badge { margin: 0 4px 2px 0; display: inline-block; }
-
 /* Регистрация физлица: переключатель «Вы индивидуальный предприниматель?» */
 .ip-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .ip-switch__opt { position: relative; cursor: pointer; }
@@ -405,19 +399,5 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
 .pay-rules ul { margin: 8px 0 0; padding-left: 18px; }
 .pay-rules li { margin-bottom: 4px; }
 @media (max-width: 960px) { .pay-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* Страница выпуска: вкладки и «Подробнее» */
-.issue-tabs { display: flex; gap: 6px; margin: 18px 0 16px; border-bottom: 1px solid var(--border-color); }
-.issue-tab { appearance: none; border: 0; background: none; padding: 10px 16px; font: inherit; font-size: 15px; font-weight: 700;
-  color: var(--text-secondary); border-bottom: 3px solid transparent; margin-bottom: -1px; cursor: pointer; }
-.issue-tab:hover { color: var(--text-primary, #111827); }
-.issue-tab--active { color: #1f5bd8; border-bottom-color: #1f5bd8; }
-.about-cfa p { margin: 0 0 8px; line-height: 1.55; font-size: 15px; }
-.about-cfa p:last-child { margin-bottom: 0; }
-.dash-sub-h { margin: 16px 0 6px; font-size: 14px; }
-.risk-list { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; }
-.kv-row b.mono { font-weight: 500; text-align: right; }
-.issue-pane[data-pane="details"] > .dash-card + .dash-card,
-.issue-pane[data-pane="details"] > .dash-two + .dash-card { margin-top: 16px; }
 .pay-table td:nth-child(4), .pay-table td:nth-child(5) { white-space: nowrap; }
 .nowrap { white-space: nowrap; }
