@@ -278,7 +278,7 @@ def _ip_prefill(user) -> dict:
     if user["role"] != "IP":
         return {}
     a = json.loads(user["profile_json"] or "{}")
-    fio = a.get("ip_fio", "")
+    fio = a.get("fl_fio", "")
     return {"issuer_full_name": f"Индивидуальный предприниматель {fio}", "ogrn_date": a.get("ip_reg_date", ""),
             "beneficiary": f"{fio} — индивидуальный предприниматель, 100 %", "signer_name": fio,
             "signer_position": "Индивидуальный предприниматель"}
@@ -498,7 +498,7 @@ def api_register():
             wallet_name=wallet_name, bank_account=account, bank_bik=bik,
         )
     except db.FieldError as e:
-        field = {"inn": {"FL": "fl_inn", "IP": "ip_inn"}.get(role, "ul_inn_kpp")}.get(e.field, e.field)
+        field = {"inn": "fl_inn" if role in validators.PERSON_ROLES else "ul_inn_kpp"}.get(e.field, e.field)
         return _field_errors({field: str(e)})
     except sqlite3.IntegrityError:
         return _field_errors({"login": "Этот логин уже занят — придумайте другой."})

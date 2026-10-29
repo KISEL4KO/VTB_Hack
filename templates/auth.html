@@ -42,7 +42,6 @@
           <div class="auth-role-tabs">
             <button type="button" id="btn-role-fl" class="auth-role-tab auth-role-tab--active" onclick="switchAuthRole('fl')">Для физ лиц</button>
             <button type="button" id="btn-role-ul" class="auth-role-tab" onclick="switchAuthRole('ul')">Для юр лиц</button>
-            <button type="button" id="btn-role-ip" class="auth-role-tab" onclick="switchAuthRole('ip')">Для ИП</button>
           </div>
 
           <div class="figma-blue-questionnaire">
@@ -66,7 +65,15 @@
 
             <!-- Анкета физлица. Неактивный fieldset (disabled) не попадает в FormData и не проверяется. -->
             <fieldset id="fs-fl" class="auth-fieldset">
-              <p class="figma-blue-questionnaire__lead auth-fieldset__lead">
+              <div class="form-group-title">Вы индивидуальный предприниматель?</div>
+              <div class="ip-switch" role="radiogroup" aria-label="Статус ИП">
+                <label class="ip-switch__opt"><input type="radio" name="fl_is_ip" value="no" checked>
+                  <span><b>Нет</b><small>Физическое лицо — покупаю ЦФА</small></span></label>
+                <label class="ip-switch__opt"><input type="radio" name="fl_is_ip" value="yes">
+                  <span><b>Да, я ИП</b><small>Покупаю ЦФА и могу выпускать свои</small></span></label>
+              </div>
+              <p class="figma-blue-questionnaire__lead auth-fieldset__lead" data-fl="Анкета физического лица (данные могут быть тестовыми, но в правильном формате):"
+                 data-ip="Анкета индивидуального предпринимателя: личные данные, затем сведения о регистрации ИП (данные могут быть тестовыми, но в правильном формате):">
                 Анкета физического лица (данные могут быть тестовыми, но в правильном формате):
               </p>
 
@@ -75,6 +82,7 @@
                 <div class="form-field form-field--full">
                   <label>ФИО</label>
                   <input type="text" name="fl_fio" placeholder="Иванов Иван Иванович">
+                  <small class="field-hint ip-only">На платформе вы будете «ИП Фамилия Имя Отчество»</small>
                 </div>
                 <div class="form-field">
                   <label>Дата рождения</label>
@@ -117,7 +125,7 @@
                 </div>
               </div>
 
-              <div class="form-group-title">4. Адрес регистрации (прописки)</div>
+              <div class="form-group-title" data-fl="4. Адрес регистрации (прописки)" data-ip="4. Место жительства (адрес ИП в ЕГРИП)">4. Адрес регистрации (прописки)</div>
               <div class="form-grid-2">
                 <div class="form-field form-field--full">
                   <label>Город</label>
@@ -133,7 +141,7 @@
               <div class="form-group-title">5. Налоговые идентификаторы и Статус инвестора</div>
               <div class="form-grid-2">
                 <div class="form-field">
-                  <label>ИНН (для удержания НДФЛ)</label>
+                  <label data-fl="ИНН (для удержания НДФЛ)" data-ip="ИНН (личный, он же ИНН ИП)">ИНН (для удержания НДФЛ)</label>
                   <input type="text" name="fl_inn" placeholder="770000000000" inputmode="numeric">
                 </div>
                 <div class="form-field">
@@ -141,13 +149,39 @@
                   <input type="text" name="fl_snils" placeholder="000-000-000 00" inputmode="numeric">
                 </div>
                 <div class="form-field form-field--full">
-                  <label>Статус инвестора (влияет на лимиты покупки ЦФА по 259-ФЗ)</label>
+                  <label data-fl="Статус инвестора (влияет на лимиты покупки ЦФА по 259-ФЗ)"
+                         data-ip="Статус инвестора (при покупке ЦФА ИП — физлицо, лимиты как у физлиц)">Статус инвестора (влияет на лимиты покупки ЦФА по 259-ФЗ)</label>
                   <select name="fl_investor_status">
                     <option value="unqualified">Неквалифицированный инвестор (лимит 600 000 ₽ в год)</option>
                     <option value="qualified">Квалифицированный инвестор (без лимита)</option>
                   </select>
                 </div>
               </div>
+
+              <!-- Только для ИП: включается переключателем «Да, я ИП» -->
+              <fieldset id="fs-ip-extra" class="auth-fieldset hidden" disabled>
+                <div class="form-group-title">6. Регистрация ИП и расчётный счёт</div>
+                <div class="form-grid-2">
+                  <div class="form-field">
+                    <label>ОГРНИП</label>
+                    <input type="text" name="ip_ogrnip" data-digits maxlength="15" inputmode="numeric" placeholder="304770000000000">
+                    <small class="field-hint">15 цифр, начинается с 3</small>
+                  </div>
+                  <div class="form-field">
+                    <label>Дата регистрации ИП</label>
+                    <input type="date" name="ip_reg_date" min="1992-01-01">
+                  </div>
+                  <div class="form-field">
+                    <label>Расчётный счёт ИП</label>
+                    <input type="text" name="ip_bank_account" data-digits maxlength="20" inputmode="numeric" placeholder="40802810000000000000">
+                    <small class="field-hint">20 цифр, счёт ИП начинается с 40802</small>
+                  </div>
+                  <div class="form-field">
+                    <label>БИК банка</label>
+                    <input type="text" name="ip_bank_bik" data-digits maxlength="9" inputmode="numeric" placeholder="044525225">
+                  </div>
+                </div>
+              </fieldset>
             </fieldset>
 
             <!-- Анкета юрлица -->
@@ -161,7 +195,7 @@
                 <div class="form-field form-field--full">
                   <label>Сокращённое наименование компании</label>
                   <input type="text" name="ul_company_name" placeholder="ООО «Альфа-Инвест»">
-                  <small class="field-hint">С формой собственности: ООО «…», АО «…», ПАО «…». ИП — на вкладке «Для ИП»</small>
+                  <small class="field-hint">С формой собственности: ООО «…», АО «…», ПАО «…». ИП — на вкладке «Для физ лиц»</small>
                 </div>
                 <div class="form-field">
                   <label>ОГРН</label>
@@ -225,103 +259,6 @@
               </div>
             </fieldset>
 
-            <!-- Анкета индивидуального предпринимателя -->
-            <fieldset id="fs-ip" class="auth-fieldset hidden" disabled>
-              <p class="figma-blue-questionnaire__lead auth-fieldset__lead">
-                Анкета индивидуального предпринимателя: ИП может покупать ЦФА и выпускать свои (данные могут быть тестовыми,
-                но в правильном формате):
-              </p>
-
-              <div class="form-group-title">1. Предприниматель</div>
-              <div class="form-grid-2">
-                <div class="form-field form-field--full">
-                  <label>ФИО предпринимателя</label>
-                  <input type="text" name="ip_fio" placeholder="Петров Пётр Петрович">
-                  <small class="field-hint">Наименование на платформе будет «ИП Петров Пётр Петрович»</small>
-                </div>
-                <div class="form-field">
-                  <label>Дата рождения</label>
-                  <input type="date" name="ip_birth_date" min="1900-01-01">
-                </div>
-                <div class="form-field">
-                  <label>Место рождения</label>
-                  <input type="text" name="ip_birth_place" data-suggest="cities" autocomplete="off"
-                         placeholder="Начните вводить город">
-                </div>
-              </div>
-
-              <div class="form-group-title">2. Государственная регистрация ИП</div>
-              <div class="form-grid-2">
-                <div class="form-field">
-                  <label>ОГРНИП</label>
-                  <input type="text" name="ip_ogrnip" data-digits maxlength="15" inputmode="numeric" placeholder="304770000000000">
-                  <small class="field-hint">15 цифр, начинается с 3</small>
-                </div>
-                <div class="form-field">
-                  <label>Дата регистрации ИП</label>
-                  <input type="date" name="ip_reg_date" min="1992-01-01">
-                </div>
-                <div class="form-field">
-                  <label>ИНН предпринимателя</label>
-                  <input type="text" name="ip_inn" data-digits maxlength="12" inputmode="numeric" placeholder="770000000000">
-                  <small class="field-hint">12 цифр — тот же, что у вас как у физлица</small>
-                </div>
-              </div>
-
-              <div class="form-group-title">3. Контакты</div>
-              <div class="form-grid-2">
-                <div class="form-field">
-                  <label>Мобильный телефон</label>
-                  <input type="tel" name="ip_phone" placeholder="+7 (999) 000-00-00">
-                </div>
-                <div class="form-field">
-                  <label>Адрес электронной почты</label>
-                  <input type="email" name="ip_email" placeholder="ip@example.ru">
-                </div>
-              </div>
-
-              <div class="form-group-title">4. Паспорт и место жительства</div>
-              <div class="form-grid-2">
-                <div class="form-field">
-                  <label>Серия и номер паспорта</label>
-                  <input type="text" name="ip_passport_num" data-digits maxlength="10" inputmode="numeric" placeholder="4500123456">
-                  <small class="field-hint">10 цифр подряд: серия и номер</small>
-                </div>
-                <div class="form-field">
-                  <label>Код подразделения, кем и когда выдан</label>
-                  <input type="text" name="ip_passport_issued" placeholder="770-001, ГУ МВД России">
-                </div>
-                <div class="form-field form-field--full">
-                  <label>Город (место жительства — адрес ИП в ЕГРИП)</label>
-                  <input type="text" name="ip_reg_city" data-suggest="cities" data-strict autocomplete="off"
-                         placeholder="Начните вводить и выберите город из списка">
-                </div>
-                <div class="form-field form-field--full">
-                  <label>Улица, дом, квартира</label>
-                  <input type="text" name="ip_reg_street" placeholder="ул. Ленина, д. 1, кв. 1">
-                </div>
-              </div>
-
-              <div class="form-group-title">5. Банковские реквизиты и статус инвестора</div>
-              <div class="form-grid-2">
-                <div class="form-field">
-                  <label>Расчётный счёт ИП</label>
-                  <input type="text" name="ip_bank_account" data-digits maxlength="20" inputmode="numeric" placeholder="40802810000000000000">
-                  <small class="field-hint">20 цифр, счёт ИП начинается с 40802</small>
-                </div>
-                <div class="form-field">
-                  <label>БИК банка</label>
-                  <input type="text" name="ip_bank_bik" data-digits maxlength="9" inputmode="numeric" placeholder="044525225">
-                </div>
-                <div class="form-field form-field--full">
-                  <label>Статус инвестора (при покупке ЦФА ИП — физлицо, лимиты как у физлиц)</label>
-                  <select name="ip_investor_status">
-                    <option value="unqualified">Неквалифицированный инвестор (лимит 600 000 ₽ в год)</option>
-                    <option value="qualified">Квалифицированный инвестор (без лимита)</option>
-                  </select>
-                </div>
-              </div>
-            </fieldset>
 
             <div id="register-error" class="form-error hidden"></div>
             <div class="auth-submit-row auth-submit-row--in-card">

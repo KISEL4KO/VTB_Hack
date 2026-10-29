@@ -179,8 +179,8 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
 
     profile: dict = {}
 
-    # ---------- 2а. Анкета физического лица ----------
-    if role == "FL":
+    # ---------- 2а. Анкета физического лица (и ИП — это тоже физлицо, плюс блок регистрации ИП) ----------
+    if role in PERSON_ROLES:
         fio = " ".join(need("fl_fio", "Укажите ФИО.").split())   # схлопываем лишние пробелы
         if fio and not FIO_RE.fullmatch(fio):
             errors["fl_fio"] = "Фамилия, имя и (при наличии) отчество — только буквы и дефис."
@@ -217,7 +217,7 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
 
         inn = digits(need("fl_inn", "Укажите ИНН."))
         if f.get("fl_inn") and len(inn) != 12:
-            errors["fl_inn"] = "ИНН физического лица — 12 цифр."
+            errors["fl_inn"] = "ИНН физического лица и ИП — 12 цифр."
 
         snils = digits(need("fl_snils", "Укажите СНИЛС."))
         if f.get("fl_snils") and len(snils) != 11:
@@ -226,6 +226,29 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
         status = f.get("fl_investor_status", "")
         if status not in FL_STATUSES:
             errors["fl_investor_status"] = "Выберите статус инвестора."
+
+        # ---------- 2б. Только для ИП: регистрация в ЕГРИП и расчётный счёт ----------
+        ogrnip = account = bik = ""
+        if role == "IP":
+            ogrnip = digits(need("ip_ogrnip", "Укажите ОГРНИП."))
+            if f.get("ip_ogrnip") and len(ogrnip) != 15:
+                errors["ip_ogrnip"] = "ОГРНИП — 15 цифр."
+            elif ogrnip and ogrnip[0] != "3":
+                errors["ip_ogrnip"] = "ОГРНИП начинается с цифры 3."
+
+            reg_date = need("ip_reg_date", "Укажите дату регистрации ИП.")
+            if reg_date:
+                try:
+                    if date.fromisoformat(reg_date) > date.today():
+                        errors["ip_reg_date"] = "Дата не может быть в будущем."
+                except ValueError:
+                    errors["ip_reg_date"] = "Укажите дату полностью."
+
+            account = digits(need("ip_bank_account", "Укажите расчётный счёт."))
+            check("ip_bank_account", account if f.get("ip_bank_account") else "", check_ip_account)
+            bik = digits(need("ip_bank_bik", "Укажите БИК."))
+            if f.get("ip_bank_bik") and (len(bik) != 9 or not bik.startswith("04")):
+                errors["ip_bank_bik"] = "БИК — 9 цифр и начинается с 04."
 
         if not errors:
             profile = dict(
@@ -238,90 +261,20 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
                 address=f"{reg_city}, {reg_street}",
                 is_qualified=1 if status == "qualified" else 0,
             )
-
-    # ---------- 2б. Анкета индивидуального предпринимателя ----------
-    elif role == "IP":
-        fio = " ".join(need("ip_fio", "Укажите ФИО предпринимателя.").split())
-        if fio and not FIO_RE.fullmatch(fio):
-            errors["ip_fio"] = "Фамилия, имя и (при наличии) отчество — только буквы и дефис."
-
-        check("ip_birth_date", need("ip_birth_date", "Укажите дату рождения."), check_birth_date)
-        birth_place = need("ip_birth_place", "Укажите место рождения.")
-        if birth_place and (len(birth_place) < 2 or not HAS_LETTER_RE.search(birth_place)):
-            errors["ip_birth_place"] = "Укажите населённый пункт."
-
-        phone = normalize_phone(need("ip_phone", "Укажите телефон."))
-        if f.get("ip_phone") and not phone:
-            errors["ip_phone"] = "Российский номер: +7 и 10 цифр."
-        email = need("ip_email", "Укажите e-mail.")
-        if email and not EMAIL_RE.fullmatch(email):
-            errors["ip_email"] = "Некорректный e-mail, пример: user@example.ru"
-
-        passport = need("ip_passport_num", "Укажите серию и номер паспорта.")
-        check("ip_passport_num", passport, check_passport)
-        issued = need("ip_passport_issued")
-        if issued and (not DEPT_CODE_RE.search(issued) or len(issued) < 10):
-            errors["ip_passport_issued"] = "Укажите код подразделения (000-000) и кем выдан."
-
-        # У ИП нет юридического адреса: в ЕГРИП и в Решении о выпуске указывается место жительства
-        reg_city = need("ip_reg_city", "Выберите город регистрации.")
-        check("ip_reg_city", reg_city, check_city)
-        reg_street = need("ip_reg_street", "Укажите улицу, дом и квартиру.")
-        check("ip_reg_street", reg_street, check_street)
-
-        inn = digits(need("ip_inn", "Укажите ИНН."))
-        if f.get("ip_inn") and len(inn) != 12:
-            errors["ip_inn"] = "ИНН индивидуального предпринимателя — 12 цифр."
-
-        ogrnip = digits(need("ip_ogrnip", "Укажите ОГРНИП."))
-        if f.get("ip_ogrnip") and len(ogrnip) != 15:
-            errors["ip_ogrnip"] = "ОГРНИП — 15 цифр."
-        elif ogrnip and ogrnip[0] != "3":
-            errors["ip_ogrnip"] = "ОГРНИП начинается с цифры 3."
-
-        reg_date = need("ip_reg_date", "Укажите дату регистрации ИП.")
-        if reg_date:
-            try:
-                if date.fromisoformat(reg_date) > date.today():
-                    errors["ip_reg_date"] = "Дата не может быть в будущем."
-            except ValueError:
-                errors["ip_reg_date"] = "Укажите дату полностью."
-
-        account = digits(need("ip_bank_account", "Укажите расчётный счёт."))
-        check("ip_bank_account", account if f.get("ip_bank_account") else "", check_ip_account)
-        bik = digits(need("ip_bank_bik", "Укажите БИК."))
-        if f.get("ip_bank_bik") and (len(bik) != 9 or not bik.startswith("04")):
-            errors["ip_bank_bik"] = "БИК — 9 цифр и начинается с 04."
-
-        status = f.get("ip_investor_status", "")
-        if status not in FL_STATUSES:
-            errors["ip_investor_status"] = "Выберите статус инвестора."
-
-        if not errors:
-            profile = dict(
-                full_name=f"ИП {fio}",
-                inn=inn,
-                snils_or_ogrn=ogrnip,
-                phone=phone,
-                email=email,
-                passport_or_rep=f"{fmt_passport(passport)}, {issued}",
-                address=f"{reg_city}, {reg_street}",
-                is_qualified=1 if status == "qualified" else 0,
-                bank_account=account,
-                bank_bik=bik,
-            )
+            if role == "IP":   # у ИП вместо СНИЛС в карточке — ОГРНИП, деньги — на расчётном счёте 40802
+                profile.update(full_name=f"ИП {fio}", snils_or_ogrn=ogrnip, bank_account=account, bank_bik=bik)
 
     # ---------- 2в. Анкета юридического лица ----------
     else:
         company = " ".join(need("ul_company_name", "Укажите сокращённое наименование.").split())
         if company and re.match(r"(ИП|КФХ)\s", company, re.IGNORECASE):
-            errors["ul_company_name"] = "Индивидуальный предприниматель регистрируется на вкладке «Для ИП»."
+            errors["ul_company_name"] = "ИП регистрируется на вкладке «Для физ лиц» → «Да, я ИП»."
         elif company and (not COMPANY_RE.fullmatch(company) or len(company) > 120):
             errors["ul_company_name"] = "Начните с формы собственности: ООО «Ромашка», АО «Альфа», ПАО «Бета»."
 
         ogrn = digits(need("ul_ogrn", "Укажите ОГРН."))
         if f.get("ul_ogrn") and len(ogrn) == 15:
-            errors["ul_ogrn"] = "15 цифр — это ОГРНИП. ИП регистрируется на вкладке «Для ИП»."
+            errors["ul_ogrn"] = "15 цифр — это ОГРНИП. ИП регистрируется на вкладке «Для физ лиц» → «Да, я ИП»."
         elif f.get("ul_ogrn") and len(ogrn) != 13:
             errors["ul_ogrn"] = "ОГРН юридического лица — 13 цифр."
 
@@ -380,9 +333,9 @@ def validate_registration(role: str, f: dict) -> tuple[dict, dict]:
             )
 
     # Полная анкета (все поля формы, кроме паролей) — её сверяет администратор
-    anketa = {k: v for k, v in f.items() if k not in ("password", "password2", "login")}
-    if role in ("FL", "IP") and not errors:
-        anketa[role.lower() + "_phone"] = profile["phone"]
+    anketa = {k: v for k, v in f.items() if k not in ("password", "password2", "login", "fl_is_ip")}
+    if role in PERSON_ROLES and not errors:
+        anketa["fl_phone"] = profile["phone"]
     return {"login": login, "profile": profile, "anketa": anketa}, errors
 
 
@@ -582,19 +535,18 @@ ANKETA_LABELS = {
         ("Банковские реквизиты", [("ul_bank_account", "Расчётный счёт"), ("ul_bank_bik", "БИК")]),
     ],
     "IP": [
-        ("Предприниматель", [("ip_fio", "ФИО"), ("ip_birth_date", "Дата рождения"),
-                             ("ip_birth_place", "Место рождения")]),
-        ("Регистрация ИП", [("ip_ogrnip", "ОГРНИП"), ("ip_reg_date", "Дата регистрации"), ("ip_inn", "ИНН")]),
-        ("Контакты", [("ip_phone", "Телефон"), ("ip_email", "E-mail")]),
-        ("Паспорт", [("ip_passport_num", "Серия и номер"), ("ip_passport_issued", "Код подразделения, кем выдан")]),
-        ("Место жительства", [("ip_reg_city", "Город"), ("ip_reg_street", "Улица, дом, квартира")]),
-        ("Банковские реквизиты и статус", [("ip_bank_account", "Расчётный счёт"), ("ip_bank_bik", "БИК"),
-                                           ("ip_investor_status", "Статус инвестора")]),
+        ("Основные данные", [("fl_fio", "ФИО предпринимателя"), ("fl_birth_date", "Дата рождения"),
+                             ("fl_birth_place", "Место рождения"), ("fl_citizenship", "Гражданство")]),
+        ("Регистрация ИП", [("ip_ogrnip", "ОГРНИП"), ("ip_reg_date", "Дата регистрации"), ("fl_inn", "ИНН")]),
+        ("Контакты", [("fl_phone", "Телефон"), ("fl_email", "E-mail")]),
+        ("Паспорт", [("fl_passport_num", "Серия и номер"), ("fl_passport_issued", "Код подразделения, кем выдан")]),
+        ("Место жительства", [("fl_reg_city", "Город"), ("fl_reg_street", "Улица, дом, квартира")]),
+        ("Реквизиты и статус", [("ip_bank_account", "Расчётный счёт"), ("ip_bank_bik", "БИК"), ("fl_snils", "СНИЛС"),
+                                ("fl_investor_status", "Статус инвестора")]),
     ],
 }
 ANKETA_VALUES = {
     "fl_investor_status": {"unqualified": "Неквалифицированный инвестор", "qualified": "Квалифицированный инвестор"},
-    "ip_investor_status": {"unqualified": "Неквалифицированный инвестор", "qualified": "Квалифицированный инвестор"},
     "ul_rep_role": {"signer": "Право подписи сделок и выпуска ЦФА (УКЭП)", "viewer": "Только просмотр"},
 }
 
@@ -607,7 +559,7 @@ def anketa_rows(role: str, anketa: dict) -> list[tuple[str, list[tuple[str, str]
         for key, label in fields:
             value = anketa.get(key, "") or "—"
             value = ANKETA_VALUES.get(key, {}).get(value, value)
-            if key in ("fl_birth_date", "ip_birth_date", "ip_reg_date") and len(value) == 10 and value[4] == "-":
+            if key in ("fl_birth_date", "ip_reg_date") and len(value) == 10 and value[4] == "-":
                 value = f"{value[8:]}.{value[5:7]}.{value[:4]}"
             rows.append((label, value))
         out.append((section, rows))

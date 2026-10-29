@@ -66,16 +66,17 @@ def _ul(login, name, inn, kpp, ogrn, account, rep_fio, rep_passport, rep_inn, ci
                 wallet="Корпоративный кошелёк")
 
 
-def _ip(login, fio, inn, ogrnip, reg_date, account, passport, phone, email, birth, city, street, qualified=False):
+def _ip(login, fio, inn, snils, ogrnip, reg_date, account, passport, phone, email, birth, city, street, qualified=False):
+    """ИП регистрируется на вкладке физлица («Да, я ИП»): личная анкета fl_* + блок регистрации ИП ip_*."""
     anketa = {
-        "ip_fio": fio, "ip_birth_date": birth, "ip_birth_place": city, "ip_ogrnip": ogrnip, "ip_reg_date": reg_date,
-        "ip_inn": inn, "ip_phone": phone, "ip_email": email, "ip_passport_num": passport,
-        "ip_passport_issued": "770-002, ГУ МВД России по г. Москве", "ip_reg_city": city, "ip_reg_street": street,
-        "ip_bank_account": account, "ip_bank_bik": "044525225",
-        "ip_investor_status": "qualified" if qualified else "unqualified",
+        "fl_fio": fio, "fl_birth_date": birth, "fl_birth_place": city, "fl_citizenship": "РФ",
+        "fl_phone": phone, "fl_email": email, "fl_passport_num": passport,
+        "fl_passport_issued": "770-002, ГУ МВД России по г. Москве", "fl_reg_city": city, "fl_reg_street": street,
+        "fl_inn": inn, "fl_snils": snils, "fl_investor_status": "qualified" if qualified else "unqualified",
+        "ip_ogrnip": ogrnip, "ip_reg_date": reg_date, "ip_bank_account": account, "ip_bank_bik": "044525225",
     }
     profile = dict(full_name=f"ИП {fio}", inn=inn, snils_or_ogrn=ogrnip, phone=phone, email=email,
-                   passport_or_rep=f"{validators.fmt_passport(passport)}, {anketa['ip_passport_issued']}",
+                   passport_or_rep=f"{validators.fmt_passport(passport)}, {anketa['fl_passport_issued']}",
                    address=f"{city}, {street}", is_qualified=int(qualified))
     return dict(role="IP", login=login, profile=profile, anketa=anketa, account=account, bik="044525225",
                 wallet="Кошелёк ИП")
@@ -120,7 +121,7 @@ def seed(conn, chain) -> None:
     investor = _register(conn, _fl("demo_investor", "Петров Пётр Петрович", "770100000079", "12345678964",
                                    "4500123456", "+79990000001", "investor@example.ru", "1995-04-12",
                                    "г. Казань, Республика Татарстан", "ул. Баумана, д. 5, кв. 12"))
-    ip = _register(conn, _ip("demo_ip", "Волков Андрей Николаевич", "772400001214", "319770000123451", "2019-06-03",
+    ip = _register(conn, _ip("demo_ip", "Волков Андрей Николаевич", "772400001214", "22334455639", "319770000123451", "2019-06-03",
                              "40802810800000000123", "4511223344", "+79990000005", "ip@example.ru", "1986-11-02",
                              "г. Москва", "ул. Профсоюзная, д. 12, кв. 40"))
     for uid in (issuer, fund, investor, ip):
