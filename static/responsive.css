@@ -1,0 +1,305 @@
+/* ==========================================================================
+   АДАПТИВНАЯ ВЁРСТКА: телефоны, планшеты, ноутбуки и большие мониторы
+   Подключается последним, после style.css и app.css.
+
+   Точки перелома:
+     ≥ 1680  большой монитор — шире контейнеры, витрина в 4 колонки
+     ≥ 1280  ноутбук и десктоп — исходный макет
+     1024–1279  небольшой ноутбук, планшет горизонтально — узкое боковое меню
+     < 1024  планшет вертикально — меню разделов становится лентой вкладок под шапкой
+     < 640   телефон — компактная шапка, таблицы карточками, окна снизу экрана
+     < 380   маленький телефон (360 px)
+   ========================================================================== */
+
+:root {
+  --header-h: 70px;
+  --page-max: 1360px;
+  --gutter: 24px;
+}
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+img, svg, video { max-width: 100%; }
+/* Нажатие на ссылку или кнопку на телефоне — без серой вспышки, но с видимым фокусом с клавиатуры */
+a, button, label, summary { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--blue-primary); outline-offset: 2px; }
+
+/* Общие контейнеры подчиняются одной ширине страницы */
+.top-header { height: var(--header-h); }
+.top-header__inner, .cabinet-layout { max-width: var(--page-max); }
+.top-header__inner { padding-left: var(--gutter); padding-right: var(--gutter); }
+.cabinet-layout { padding-left: var(--gutter); padding-right: var(--gutter); }
+.cabinet-sidebar { top: calc(var(--header-h) + 22px); }
+.rov-dash { top: calc(var(--header-h) + 18px); }
+
+body.modal-open { overflow: hidden; }
+.ui-table--compact th, .ui-table--compact td { padding: 8px 10px; }
+
+/* Подписи кнопок шапки: полная и короткая (для телефона) */
+.lbl-short { display: none; }
+.top-header__market-link, .top-header__cabinet-btn, .top-header__logout { white-space: nowrap; }
+.top-header__cabinet-btn { display: inline-flex; align-items: center; }
+.top-header__brand-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+.top-header__user { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Кнопки карточки выпуска: «Купить ЦФА» не переносится на две строки */
+.cfa-card__actions { flex-wrap: wrap; }
+.cfa-card__actions > * { white-space: nowrap; }
+.cfa-card__actions > :first-child { flex: 1 1 auto; }
+
+/* ---------- HERO витрины: картинка справа без растягивания, текст на тёмном фоне ---------- */
+.hero-banner { display: block; min-height: 360px; background: #0B192C; }
+.hero-banner__picture { position: absolute; inset: 0; display: block; }
+.hero-banner__picture .hero-banner__img { width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: 60% 40%; }
+.hero-banner__overlay { position: relative; inset: auto; min-height: clamp(360px, 42vw, 520px); }
+
+@media (min-width: 1280px) {
+  /* На широком экране картинка не растягивается сверх своих 1024 px: она справа, слева — фирменный градиент */
+  .hero-banner { background: linear-gradient(100deg, #0B192C 0%, #0f2a52 45%, #13306a 100%); }
+  .hero-banner__picture { left: auto; width: min(62%, 1024px); }
+  .hero-banner__picture::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, #0d2248 0%, rgba(13, 34, 72, .55) 22%, rgba(13, 34, 72, 0) 50%); }
+  .hero-banner__overlay { min-height: 460px; background: linear-gradient(180deg, rgba(11,25,44,0) 55%, rgba(11,25,44,.55) 100%); }
+  .hero-banner__content { flex-direction: column; align-items: flex-start; justify-content: flex-end; }
+  .hero-banner__content > div:first-child { max-width: 640px; }
+  .hero-banner__heading { font-size: 40px; line-height: 1.12; }
+}
+
+/* ========================= Большие мониторы ========================= */
+@media (min-width: 1680px) {
+  :root { --page-max: 1560px; --gutter: 32px; }
+  .market-container { max-width: var(--page-max); padding-left: var(--gutter); padding-right: var(--gutter); }
+  .hero-banner__content { max-width: calc(var(--page-max) - 2 * var(--gutter)); }
+  .cards-grid-3 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .issue-page { max-width: 1440px; }
+  .auth-wrapper { max-width: 1380px; }
+  .cabinet-layout { grid-template-columns: 300px minmax(0, 1fr); }
+  .rov-layout { grid-template-columns: minmax(0, 1fr) 420px; }
+}
+@media (min-width: 2200px) {
+  :root { --page-max: 1800px; }
+  html { font-size: 17px; }
+  .cards-grid-3 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* ========================= Небольшой ноутбук / планшет горизонтально ========================= */
+@media (max-width: 1279px) {
+  .cabinet-layout { grid-template-columns: 236px minmax(0, 1fr); gap: 20px; }
+  .cabinet-content { padding: 28px 26px; }
+  .sidebar-link { padding: 9px 16px; }
+  .sidebar-section-label, .sidebar-sub-label { padding-left: 16px; padding-right: 16px; }
+  .top-header__user { max-width: 200px; }
+}
+
+/* ========================= Планшет вертикально и телефоны: меню разделов — лента вкладок ========================= */
+@media (max-width: 1023px) {
+  :root { --gutter: 20px; }
+  .cabinet-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-top: 14px; }
+  .cabinet-sidebar {
+    position: sticky; top: var(--header-h); z-index: 35;
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px; margin: 0 calc(-1 * var(--gutter)); border-radius: 0; border-left: 0; border-right: 0;
+    background: rgba(255, 255, 255, .94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; scroll-padding: 0 16px;
+    box-shadow: 0 6px 16px -10px rgba(15, 23, 42, .25);
+  }
+  .cabinet-sidebar::-webkit-scrollbar { display: none; }
+  .cabinet-sidebar .sidebar-section-label, .cabinet-sidebar .sidebar-sub-label { display: none; }
+  .sidebar-nav { flex-direction: row; gap: 6px; margin: 0; flex: 0 0 auto; }
+  .sidebar-nav + .sidebar-nav { padding-left: 8px; border-left: 1px solid var(--border-color); }
+  .cabinet-sidebar .sidebar-link {
+    flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--border-color); border-radius: 999px;
+    padding: 8px 14px; min-height: 38px; font-size: 13.5px; background: #fff;
+  }
+  .cabinet-sidebar .sidebar-link--active { background: var(--blue-header-dark); border-color: var(--blue-header-dark); color: #fff; font-weight: 700; }
+  .cabinet-sidebar .sidebar-dot { display: none; }
+  .cabinet-sidebar .nav-count { margin-left: 2px; }
+  .cabinet-sidebar .sidebar-link--active .nav-count { background: #fff; color: var(--blue-header-dark); }
+  /* Края ленты подсказывают, что её можно прокрутить */
+  .cabinet-sidebar { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent 100%); }
+
+  .cabinet-content { padding: 24px 22px; min-height: 0; }
+  .market-container { padding: 28px var(--gutter) 48px; }
+  .issue-page { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .auth-wrapper { padding: 24px var(--gutter) 48px; }
+  /* Иллюстрация входа на планшете и телефоне только отнимает экран — анкета важнее */
+  .auth-art-box { display: none; }
+  .auth-grid { grid-template-columns: minmax(0, 1fr); }
+  /* Форма РоВ без боковой панели: снова две колонки полей, пока хватает ширины */
+  .rov-form .light-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pane-header-row { margin-bottom: 18px; padding-bottom: 14px; }
+}
+
+/* ========================= Телефон ========================= */
+@media (max-width: 639px) {
+  :root { --header-h: 58px; --gutter: 14px; }
+  .top-header__inner { gap: 8px; }
+  .top-header__right { gap: 6px; }
+  .lbl-long { display: none; }
+  .lbl-short { display: inline; }
+  .top-header__market-link, .top-header__cabinet-btn, .top-header__logout { padding: 8px 12px; font-size: 13px; min-height: 36px; margin: 0; }
+  .header-count { margin-left: 5px; min-width: 18px; line-height: 18px; font-size: 11px; }
+
+  /* Витрина */
+  .hero-banner__picture { position: relative; inset: auto; height: 210px; }
+  .hero-banner__picture::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,25,44,0) 55%, #0B192C 100%); }
+  .hero-banner__overlay { min-height: 0; padding: 4px var(--gutter) 24px; background: #0B192C; }
+  .hero-banner__heading { font-size: 25px; line-height: 1.18; }
+  .hero-banner__sub { font-size: 14px; }
+  .hero-banner__badge { font-size: 11px; }
+  .hero-banner__actions { width: 100%; }
+  .hero-banner__actions > * { flex: 1 1 100%; min-height: 44px; }
+  .market-container { padding: 22px var(--gutter) 40px; }
+  .section-header { margin-bottom: 16px; }
+  .section-header > button { width: 100%; min-height: 44px; }
+  .section-title { font-size: 21px; }
+  .cards-grid-3 { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .cfa-card { padding: 18px 16px; }
+  .cfa-card:hover { transform: none; }
+  .cfa-card__actions > * { min-height: 42px; }
+
+  /* Кабинет и админка */
+  .cabinet-layout { padding: 10px var(--gutter) 40px; gap: 10px; }
+  .cabinet-content { padding: 18px 14px; border-radius: 16px; }
+  .pane-title { font-size: 20px; }
+  .pane-header-row { gap: 12px; }
+  .pane-header-row > .head-actions { width: 100%; }
+  .pane-header-row > .btn-primary { width: 100%; text-align: center; min-height: 44px; }
+  .head-actions > .btn-primary, .head-actions > .btn-secondary, .head-actions > .btn-danger { flex: 1 1 auto; text-align: center; }
+  .stat-grid, .report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stat-tile { padding: 12px; }
+  .stat-tile b { font-size: 20px; }
+  .pay-summary { gap: 8px; }
+  .kpi { padding: 10px 12px; }
+  .kpi b { font-size: 17px; }
+  .kpi-grid--2, .kpi-grid--3, .kpi-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .dash-card { padding: 16px 14px; border-radius: 16px; }
+  .admin-card { padding: 12px 14px; }
+  .decision-buttons > * { flex: 1 1 100%; min-height: 44px; }
+  .doc-box { min-height: 0; padding: 18px; }
+  .light-form-card { padding: 16px; }
+  .rov-section { padding: 16px 14px; }
+  .rov-form .light-form-grid, .light-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .rov-actions { flex-direction: column-reverse; }
+  .rov-actions > * { width: 100%; min-height: 46px; }
+  .subtabs-bar { display: flex; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+  .subtab-btn { white-space: nowrap; }
+  .calc-input input { width: 100%; min-width: 0; }
+  .calc-input { flex: 1 1 100%; }
+
+  /* Страница выпуска */
+  .issue-hero__actions > * { flex: 1 1 auto; min-height: 44px; }
+  .issue-hero__score { padding: 14px; }
+
+  /* Вход и анкеты */
+  .auth-wrapper { padding: 14px var(--gutter) 36px; }
+  .auth-grid { padding: 20px 14px; border-radius: 20px; }
+  .auth-welcome-title { font-size: 27px; margin-bottom: 14px; }
+  .figma-blue-questionnaire { padding: 20px 14px; border-radius: 18px; }
+  .ip-switch { grid-template-columns: minmax(0, 1fr); }
+
+  /* Поля ввода 16 px: iOS не увеличивает страницу при фокусе; кнопки — удобная высота для пальца */
+  input, select, textarea, .form-field input, .form-field select, .light-field input, .light-field select, .light-field textarea { font-size: 16px !important; }
+  .form-field input, .form-field select, .light-field input, .light-field select { min-height: 44px; }
+  .btn-primary, .btn-secondary, .btn-danger, .btn-outline-light { min-height: 42px; }
+
+
+  /* Небольшие таблицы остаются таблицами, но плотнее */
+  .ui-table--plain { font-size: 13px; }
+  .ui-table--plain th, .ui-table--plain td { padding: 8px 8px; }
+  .dash-details > div { overflow-x: auto; }
+
+  /* Пары «подпись — значение» и проверки */
+  .check-item { padding: 10px; }
+
+  /* Модальные окна — снизу экрана, как на телефоне привычно */
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal-card { max-width: none; border-radius: 22px 22px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    max-height: 92dvh; overflow-y: auto; animation: sheet-up .22s ease-out; }
+  .modal-card .light-field[style*="justify-content: flex-end"] { flex-direction: column-reverse; }
+  .modal-card .light-field[style*="justify-content: flex-end"] > * { width: 100%; min-height: 46px; }
+  .toast { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; }
+  .viz-tip { max-width: calc(100vw - 24px); }
+}
+/* ========================= Таблицы: по ширине самой панели, а не экрана =========================
+   Панель кабинета/админки — контейнер. Таблица превращается:
+     панель уже 780 px (планшет, ноутбук 1024) — в плитки: строка = карточка, поля сеткой, подпись над значением;
+     панель уже 560 px (телефон) — в карточки-списки: подпись слева, значение справа.
+   Подписи столбцов ставит app.js (labelTables) из заголовков таблицы. Таблицы с классом ui-table--plain не меняются. */
+.cabinet-content { container-type: inline-size; container-name: pane; }
+
+@container pane (max-width: 780px) {
+  .ui-table-wrap:has(.ui-table:not(.ui-table--plain)) { border: 0; background: transparent; overflow: visible; border-radius: 0; }
+  .ui-table:not(.ui-table--plain) thead { display: none; }
+  .ui-table:not(.ui-table--plain), .ui-table:not(.ui-table--plain) tbody { display: block; }
+  .ui-table:not(.ui-table--plain) tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 16px;
+    border: 1px solid var(--border-color); border-radius: 14px; background: #fff; padding: 10px 14px; margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+  .ui-table:not(.ui-table--plain) td { display: block; padding: 6px 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  .ui-table:not(.ui-table--plain) td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px;
+    color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; overflow-wrap: normal; }
+  .ui-table:not(.ui-table--plain) td:not([data-label]), .ui-table:not(.ui-table--plain) td.td-wide { grid-column: 1 / -1; }
+  .ui-table:not(.ui-table--plain) td.td-empty { display: none; }
+  .ui-table:not(.ui-table--plain) td.empty-cell { grid-column: 1 / -1; text-align: center; }
+  .ui-table:not(.ui-table--plain) tr:has(td.empty-cell) { display: block; background: var(--bg-muted); border-style: dashed; }
+  .ui-table td > small, .ui-table td > .pay-note { display: block; }
+  .ui-table .mono { font-size: 11.5px; }
+  .pay-note, .args-cell { max-width: none; }
+  .row-bad { border-color: #FECACA !important; background: #FEF2F2 !important; }
+  .row-bad td { background: transparent; }
+  .pay-table tr.is-next { border-color: #93C5FD; background: #f3f8ff; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+  .pay-table tr.is-next td { background: transparent; }
+  .pay-table tr.pay-redeem td { border-top: 0; }
+  .pay-table td:nth-child(4), .pay-table td:nth-child(5) { white-space: normal; }
+}
+
+@container pane (max-width: 560px) {
+  .ui-table:not(.ui-table--plain) tr { display: block; padding: 4px 14px; }
+  /* Подпись — слева в отступе ячейки, содержимое ячейки (любая вложенность) — справа как обычный текст */
+  .ui-table:not(.ui-table--plain) td { position: relative; min-height: 38px; padding: 9px 0 9px 42%;
+    border-bottom: 1px dashed var(--border-color); text-align: right; }
+  .ui-table:not(.ui-table--plain) td[data-label]::before { position: absolute; left: 0; top: 9px; width: 39%; margin: 0;
+    text-align: left; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; line-height: 1.35; }
+  .ui-table:not(.ui-table--plain) td:not([data-label]) { padding-left: 0; text-align: left; }
+  .ui-table:not(.ui-table--plain) tr td:last-child { border-bottom: 0; }
+  .ui-table:not(.ui-table--plain) td.empty-cell { border: 0; padding-left: 0; text-align: center; }
+}
+@container pane (max-width: 340px) {
+  .ui-table:not(.ui-table--plain) td { padding-left: 44%; }
+  .ui-table:not(.ui-table--plain) td[data-label]::before { width: 41%; }
+}
+
+/* Кнопки карточки выпуска — по ширине самой карточки */
+.cfa-card { container-type: inline-size; }
+@container (max-width: 330px) {
+  .cfa-card__actions { gap: 8px; }
+  .cfa-card__actions > * { flex: 1 1 0; text-align: center; }
+  .cfa-card__actions > :first-child { flex: 1 1 100%; }
+}
+
+@keyframes sheet-up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .modal-card { animation: none; } * { scroll-behavior: auto !important; } }
+
+/* ========================= Маленький телефон (360 px) ========================= */
+@media (max-width: 379px) {
+  :root { --gutter: 12px; }
+  .top-header__market-link, .top-header__cabinet-btn, .top-header__logout { padding: 7px 10px; font-size: 12.5px; }
+  .hero-banner__heading { font-size: 23px; }
+  .stat-tile b { font-size: 18px; }
+  .kpi b { font-size: 16px; }
+  .mini-metrics b { font-size: 13.5px; }
+}
+
+/* Горизонтальный телефон: шапка не прилипает, чтобы не съедать и без того низкий экран */
+@media (max-height: 480px) and (orientation: landscape) {
+  .top-header { position: static; }
+  .cabinet-sidebar { top: 0; }
+}
+
+/* Печать: без шапки, меню и кнопок */
+@media print {
+  .top-header, .cabinet-sidebar, .hero-banner__actions, .modal-backdrop, .toast { display: none !important; }
+  .cabinet-layout { display: block; padding: 0; }
+  .cabinet-content { border: 0; box-shadow: none; padding: 0; }
+}

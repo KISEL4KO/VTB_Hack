@@ -273,7 +273,10 @@
       </div>
 
       <div class="auth-art-box">
-        <img class="auth-art-box__img" src="{{ url_for('static', filename='img/auth-art.jpg') }}" alt="Иллюстрация">
+        <picture>
+          <source srcset="{{ url_for('static', filename='img/auth-art.webp') }}" type="image/webp">
+          <img class="auth-art-box__img" src="{{ url_for('static', filename='img/auth-art.jpg') }}" alt="Иллюстрация" width="500" height="499" loading="lazy">
+        </picture>
         <p class="auth-art-box__caption">
           Войдите по логину и паролю или нажмите «Регистрация»: придумайте логин и пароль,
           выберите тип участника и заполните анкету. Поля с ошибками подсвечиваются красным.

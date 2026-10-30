@@ -69,8 +69,30 @@
   }
 
   // ---------------------------------------------------------------- график: горизонтальные полосы (сравнение доходностей)
+  // Ширина рисунка = ширине блока на экране (в пределах), чтобы подписи были одного размера на телефоне и мониторе.
+  // При повороте экрана или изменении окна график перерисовывается.
+  function fitWidth(el, fallback) {
+    var w = el.clientWidth;
+    return w > 0 ? Math.round(Math.min(760, Math.max(280, w))) : fallback;
+  }
+  var redrawList = [], lastVW = window.innerWidth;
+  function remember(el, fn) {
+    el.__redraw = fn;
+    if (redrawList.indexOf(el) < 0) redrawList.push(el);
+  }
+  window.addEventListener('resize', function () {
+    clearTimeout(remember._t);
+    remember._t = setTimeout(function () {
+      if (Math.abs(window.innerWidth - lastVW) < 30) return;   // мобильная адресная строка меняет только высоту
+      lastVW = window.innerWidth;
+      redrawList = redrawList.filter(function (el) { return document.body.contains(el); });
+      redrawList.forEach(function (el) { el.__redraw(); });
+    }, 150);
+  });
+
   function compareChart(el, m, opts) {
     opts = opts || {};
+    remember(el, function () { compareChart(el, m, opts); });
     var items = [
       { label: 'Эта ЦФА', value: m.ytm, me: true, note: 'доходность к погашению до НДФЛ' },
       { label: 'ОФЗ на ' + F.term(m.termDays), value: m.ofz, note: 'безрисковый ориентир того же срока' },
@@ -79,7 +101,8 @@
       { label: 'Инфляция', value: m.inflation, note: 'годовая, Росстат' }
     ].filter(function (i) { return i.value !== null && i.value !== undefined; });
     var max = Math.max.apply(null, items.map(function (i) { return i.value; }).concat([1])) * 1.12;
-    var W = opts.compact ? 360 : 520, rowH = opts.compact ? 30 : 34, labelW = opts.compact ? 112 : 132;
+    var W = fitWidth(el, opts.compact ? 360 : 520), rowH = opts.compact ? 30 : 34;
+    var labelW = W < 400 ? 116 : 132;
     var H = items.length * rowH + 8, plotW = W - labelW - 64;
     var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'viz-svg', role: 'img',
       'aria-label': 'Сравнение доходности ЦФА с ориентирами' });
@@ -107,8 +130,9 @@
   // ---------------------------------------------------------------- график: столбцы выплат
   function scheduleChart(el, rows, opts) {
     opts = opts || {};
+    remember(el, function () { scheduleChart(el, rows, opts); });
     if (!rows.length) { el.innerHTML = '<p class="viz-empty">Нет данных для графика</p>'; return; }
-    var W = opts.compact ? 360 : 520, H = opts.compact ? 170 : 190, padL = 8, padR = 8, padT = 22, padB = 30;
+    var W = fitWidth(el, opts.compact ? 360 : 520), H = opts.compact ? 170 : 190, padL = 8, padR = 8, padT = 22, padB = 30;
     var max = Math.max.apply(null, rows.map(function (r) { return r.value; })) || 1;
     var n = rows.length, plotW = W - padL - padR, plotH = H - padT - padB;
     var gap = n > 40 ? 1 : 2, bw = Math.max(2, Math.min(46, plotW / n - gap));
@@ -268,7 +292,7 @@
     partsList(q('parts'), m.score);
 
     // таблица выплат (доступная альтернатива графику)
-    q('table').innerHTML = '<table class="ui-table"><thead><tr><th>Дата</th><th>Дней</th><th>Купон</th><th>Номинал</th></tr></thead><tbody>' +
+    q('table').innerHTML = '<table class="ui-table ui-table--plain ui-table--compact"><thead><tr><th>Дата</th><th>Дней</th><th>Купон</th><th>Номинал</th></tr></thead><tbody>' +
       m.schedule.map(function (r) {
         return '<tr><td>' + F.date(r.date) + '</td><td>' + r.days + '</td><td>' + F.rub(r.coupon) + '</td><td>' + (r.principal ? F.rub(r.principal) : '—') + '</td></tr>';
       }).join('') + '</tbody></table>';

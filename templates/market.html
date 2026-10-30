@@ -3,7 +3,12 @@
 {% block content %}
 <main id="screen-market">
   <section class="hero-banner">
-    <img class="hero-banner__img" src="{{ url_for('static', filename='img/hero.jpg') }}" alt="">
+    <picture class="hero-banner__picture">
+      <source media="(max-width: 639px)" srcset="{{ url_for('static', filename='img/hero-mobile.webp') }}" type="image/webp">
+      <source srcset="{{ url_for('static', filename='img/hero-640.webp') }} 640w, {{ url_for('static', filename='img/hero-1024.webp') }} 1024w"
+              sizes="(min-width: 1280px) 62vw, 100vw" type="image/webp">
+      <img class="hero-banner__img" src="{{ url_for('static', filename='img/hero.jpg') }}" alt="" width="1024" height="669" fetchpriority="high">
+    </picture>
     <div class="hero-banner__overlay">
       <div class="hero-banner__content">
         <div>
@@ -57,14 +62,14 @@
         </div>
         <div class="cfa-card__actions">
           {% if i.status == 'SUBSCRIPTION' and i.placement_start <= today_iso <= i.placement_end %}
-          <button type="button" class="btn-primary" style="flex: 1;"
+          <button type="button" class="btn-primary"
                   data-buy="{{ i.id }}" data-title="{{ i.title }}" data-price="{{ i.price_per_cfa }}"
                   data-left="{{ i.max_qty - i.collected_qty }}" data-min="{{ i.min_order_qty }}"
                   data-max="{{ i.max_order_qty or '' }}">Купить ЦФА</button>
           {% elif i.status == 'SUBSCRIPTION' and today_iso < i.placement_start %}
-          <button type="button" class="btn-primary" style="flex: 1;" disabled>Приём с {{ i.placement_start|ddmm }}</button>
+          <button type="button" class="btn-primary" disabled>Приём с {{ i.placement_start|ddmm }}</button>
           {% else %}
-          <button type="button" class="btn-primary" style="flex: 1;" disabled>Сбор закрыт</button>
+          <button type="button" class="btn-primary" disabled>Сбор закрыт</button>
           {% endif %}
           <a class="btn-secondary btn-link" href="{{ url_for('issue_page', issue_id=i.id) }}" title="Доходность, сравнение с ОФЗ и вкладами, график выплат, калькулятор">Аналитика</a>
           <a class="btn-secondary btn-link" href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank"

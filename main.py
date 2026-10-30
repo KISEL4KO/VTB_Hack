@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import mimetypes
 import os
 import random
 import secrets
@@ -30,6 +31,10 @@ from blockchain import ISSUE_STATUS as CHAIN_ISSUE_STATUS
 from common import REPORTS as reports
 from common import (ISSUE_STATUS, OP_TYPES, ORDER_STATUS, PDF_ERROR, USER_STATUS, api_approved_required, get_benchmarks,
                     issue_payload, issuer_track, pdf_required, chain, close_db, current_user, get_db, init_chain, json_error, register_filters)
+
+# Типы файлов, которых нет в стандартной таблице Python на части систем: манифест «установки на экран» и WebP
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+mimetypes.add_type("image/webp", ".webp")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cfa-dev-secret-change-me")

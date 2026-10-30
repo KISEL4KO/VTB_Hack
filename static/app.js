@@ -36,10 +36,19 @@ async function api(url, body) {
 function reloadSoon(msg) { toast(msg); setTimeout(function () { location.reload(); }, 700); }
 
 // ---------- Модальные окна ----------
-function openModal(id) { var el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
-function closeModal(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); }
+function syncModalLock() {
+  // пока открыто окно, страница под ним не прокручивается (на телефоне иначе «уезжает» фон)
+  document.body.classList.toggle('modal-open', !!document.querySelector('.modal-backdrop:not(.hidden)'));
+}
+function openModal(id) { var el = document.getElementById(id); if (el) el.classList.remove('hidden'); syncModalLock(); }
+function closeModal(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); syncModalLock(); }
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.modal-backdrop:not(.hidden)').forEach(function (m) { m.classList.add('hidden'); });
+  syncModalLock();
+});
 document.addEventListener('click', function (e) {
-  if (e.target.classList && e.target.classList.contains('modal-backdrop')) e.target.classList.add('hidden');
+  if (e.target.classList && e.target.classList.contains('modal-backdrop')) { e.target.classList.add('hidden'); syncModalLock(); }
 });
 
 // ---------- Документы ----------
@@ -749,4 +758,52 @@ if (benchForm) {
       box.textContent = err.message;
     } finally { btn.disabled = false; }
   });
+})();
+
+
+// ---------- Адаптивность: таблицы-карточки на телефоне и лента разделов кабинета ----------
+// На узком экране (responsive.css, < 640 px) строки таблиц показываются карточками: слева подпись столбца, справа значение.
+// Подписи берутся из заголовков таблицы, с учётом объединённых ячеек (colspan). Ячейка на несколько столбцов — без подписи.
+function labelTables(root) {
+  (root || document).querySelectorAll('table.ui-table').forEach(function (table) {
+    var heads = [];
+    table.querySelectorAll('thead th').forEach(function (th) {
+      var span = th.colSpan || 1, text = th.textContent.replace(/\s+/g, ' ').trim();
+      for (var i = 0; i < span; i++) heads.push(text);
+    });
+    if (!heads.length) return;
+    table.querySelectorAll('tbody tr').forEach(function (tr) {
+      var col = 0;
+      Array.prototype.forEach.call(tr.cells, function (td) {
+        var span = td.colSpan || 1;
+        if (span === 1 && heads[col]) td.setAttribute('data-label', heads[col]);
+        // пустая ячейка (например, нет кнопки в этой строке) в карточке не нужна
+        td.classList.toggle('td-empty', !td.textContent.trim() && !td.querySelector('img, svg, input, button, a'));
+        // длинный текст (описание операции) в режиме плиток занимает всю ширину карточки
+        td.classList.toggle('td-wide', td.textContent.replace(/\s+/g, ' ').trim().length > 60);
+        col += span;
+      });
+    });
+  });
+}
+labelTables();
+// таблицы, которые рисуются позже (график выплат на странице выпуска и т. п.)
+(function () {
+  if (!window.MutationObserver) return;
+  var pending = false;
+  new MutationObserver(function (list) {
+    if (pending) return;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].addedNodes.length) { pending = true; break; }
+    }
+    if (pending) requestAnimationFrame(function () { pending = false; labelTables(); });
+  }).observe(document.body, { childList: true, subtree: true });
+})();
+
+// Лента разделов кабинета (планшет и телефон): активная вкладка видна сразу, без ручной прокрутки
+(function () {
+  var bar = document.querySelector('.cabinet-sidebar');
+  var active = bar && bar.querySelector('.sidebar-link--active');
+  if (!bar || !active || bar.scrollWidth <= bar.clientWidth) return;
+  bar.scrollLeft = active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2;
 })();

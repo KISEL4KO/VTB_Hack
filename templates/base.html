@@ -2,17 +2,28 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#2563EB">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ЦФА">
+  <link rel="icon" href="{{ url_for('static', filename='img/icons/favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ url_for('static', filename='img/icons/favicon-32.png') }}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/icons/apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <title>{% block title %}Платформа ЦФА{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='responsive.css') }}">
 </head>
 <body>
   <header class="top-header">
     <div class="top-header__inner">
       <div class="top-header__left">
         <button type="button" class="top-header__market-link" onclick="location.href='{{ url_for('home') }}'">
-          <span>Рынок ЦФА</span>
+          <img class="top-header__brand-icon" src="{{ url_for('static', filename='img/icons/favicon.svg') }}" alt="">
+          <span>Рынок<span class="lbl-long"> ЦФА</span></span>
         </button>
       </div>
       <div class="top-header__right">
@@ -20,15 +31,15 @@
           <span class="top-header__user">{{ me.full_name }}</span>
           {% if me.role == 'ADMIN' %}
           <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('admin.dashboard') }}'">
-            Админ-панель{% if admin_counts and (admin_counts.users_pending + admin_counts.issues_review) %}
+            <span class="lbl-long">Админ-панель</span><span class="lbl-short">Админка</span>{% if admin_counts and (admin_counts.users_pending + admin_counts.issues_review) %}
             <span class="header-count">{{ admin_counts.users_pending + admin_counts.issues_review }}</span>{% endif %}
           </button>
           {% else %}
-          <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('cabinet') }}'">Личный кабинет</button>
+          <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('cabinet') }}'"><span class="lbl-long">Личный кабинет</span><span class="lbl-short">Кабинет</span></button>
           {% endif %}
           <button type="button" class="top-header__logout" onclick="location.href='{{ url_for('logout') }}'">Выйти</button>
         {% else %}
-          <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('login_page') }}'">Войти на платформу</button>
+          <button type="button" class="top-header__cabinet-btn" onclick="location.href='{{ url_for('login_page') }}'"><span class="lbl-long">Войти на платформу</span><span class="lbl-short">Войти</span></button>
         {% endif %}
       </div>
     </div>
