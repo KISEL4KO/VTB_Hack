@@ -5,14 +5,13 @@
   <section class="hero-banner">
     <picture class="hero-banner__picture">
       <source media="(max-width: 639px)" srcset="{{ url_for('static', filename='img/hero-mobile.webp') }}" type="image/webp">
-      <source srcset="{{ url_for('static', filename='img/hero-640.webp') }} 640w, {{ url_for('static', filename='img/hero-1024.webp') }} 1024w"
+      <source srcset="{{ url_for('static', filename='img/hero-640.webp') }} 640w, {{ url_for('static', filename='img/hero-1024.webp') }} 1024w, {{ url_for('static', filename='img/hero-1920.webp') }} 1920w, {{ url_for('static', filename='img/hero-2560.webp') }} 2560w"
               sizes="100vw" type="image/webp">
-      <img class="hero-banner__img" src="{{ url_for('static', filename='img/hero.jpg') }}" alt="" width="1024" height="669" fetchpriority="high">
+      <img class="hero-banner__img" src="{{ url_for('static', filename='img/hero.jpg') }}" alt="" width="2560" height="711" fetchpriority="high">
     </picture>
     <div class="hero-banner__overlay">
       <div class="hero-banner__content">
         <div>
-          <div class="hero-banner__badge">ОИС ЦФА • Референс Сбербанка (Релиз 100735)</div>
           <h1 class="hero-banner__heading">Платформа «Цифровые финансовые активы»</h1>
           <p class="hero-banner__sub">
             Выпуск фиксированных ЦФА эмитентами и покупка цифровых активов физическими и юридическими лицами через смарт-контракты.
@@ -49,8 +48,6 @@
           </div>
           <h3 class="cfa-card__title">{{ i.title }}</h3>
           <p class="cfa-card__issuer">Эмитент: {{ i.issuer_name }}</p>
-          {% if i.published_at %}<p class="published-line"><span class="badge badge--published">Опубликовано</span>
-            Решение о выпуске {{ i.published_at[:10]|ddmm }} · <a href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank">открыть PDF</a></p>{% endif %}
           <div class="cfa-card__metrics">
             <div><span class="cfa-card__metric-label">Цена 1 ЦФА</span><span class="cfa-card__metric-val">{{ i.price_per_cfa|rub }}</span></div>
             <div><span class="cfa-card__metric-label">Купон</span><span class="cfa-card__metric-val">{{ ('%.1f' % i.coupon_rate)|replace('.', ',') }} %</span></div>
@@ -59,8 +56,12 @@
           <div class="progress" title="Собрано {{ i.collected_qty }} из {{ i.max_qty }} шт.">
             <div class="progress__bar" style="width: {{ (100 * i.collected_qty / i.max_qty)|round|int }}%"></div>
           </div>
-          <p class="progress__text">Собрано {{ i.collected_qty|num }} из {{ i.max_qty|num }} шт. (минимум {{ i.min_qty|num }}) · погашение {{ i.maturity_date|ddmm }}</p>
-          {% if i.status == 'SUBSCRIPTION' %}<p class="progress__text">Приём заявок: {{ i.placement_start|ddmm }} — {{ i.placement_end|ddmm }}</p>{% endif %}
+          <p class="progress__text">Собрано {{ i.collected_qty|num }} из {{ i.max_qty|num }} шт. (минимум {{ i.min_qty|num }})</p>
+          <dl class="cfa-card__dates">
+            {% if i.published_at %}<div class="cfa-card__date"><dt>Дата выпуска</dt><dd>{{ i.published_at[:10]|ddmm }}</dd></div>{% endif %}
+            {% if i.status == 'SUBSCRIPTION' %}<div class="cfa-card__date"><dt>Приём заявок</dt><dd>{{ i.placement_start|ddmm }} — {{ i.placement_end|ddmm }}</dd></div>{% endif %}
+            <div class="cfa-card__date"><dt>Погашение</dt><dd>{{ i.maturity_date|ddmm }}</dd></div>
+          </dl>
           <div class="cfa-card__analytics" data-analytics="{{ i.id }}"></div>
         </div>
         {% set block = buy_block_reason(me, i) %}

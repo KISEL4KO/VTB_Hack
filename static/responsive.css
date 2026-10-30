@@ -134,7 +134,6 @@ body.modal-open { overflow: hidden; }
   .hero-banner__overlay { position: relative; inset: auto; min-height: 0; padding: 4px var(--gutter) 24px; background: #0B192C; }
   .hero-banner__heading { font-size: 25px; line-height: 1.18; }
   .hero-banner__sub { font-size: 14px; }
-  .hero-banner__badge { font-size: 11px; }
   .hero-banner__actions { width: 100%; }
   .hero-banner__actions > * { flex: 1 1 100%; min-height: 44px; }
   .market-container { padding: 22px var(--gutter) 40px; }
@@ -170,7 +169,6 @@ body.modal-open { overflow: hidden; }
   .rov-form .light-form-grid, .light-form-grid { grid-template-columns: minmax(0, 1fr); }
   .rov-actions { flex-direction: column-reverse; }
   .rov-actions > * { width: 100%; min-height: 46px; }
-  .subtabs-bar { display: flex; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
   .subtab-btn { white-space: nowrap; }
   .calc-input input { width: 100%; min-width: 0; }
   .calc-input { flex: 1 1 100%; }

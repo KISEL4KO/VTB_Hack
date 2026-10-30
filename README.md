@@ -701,8 +701,7 @@ VTB_Hack/
 │   ├── base.html · market.html · auth.html · _modals.html · issue_page.html
 │   ├── cabinet/             # кабинет: кошельки, активы, операции, история, отчёты,
 │   │                        #   профиль, «на проверке», мои выпуски, форма РоВ
-│   ├── admin/               # админка: сводка, участники, выпуски, блокчейн, журнал, отчёты, ориентиры
-│   └── index.html           # исходный статичный прототип (маршрутами не используется)
+│   └── admin/               # админка: сводка, участники, выпуски, блокчейн, журнал, отчёты, ориентиры
 │
 ├── static/
 │   ├── style.css · app.css · app.js
@@ -714,7 +713,9 @@ VTB_Hack/
 │   ├── fonts/               # PT Serif / PT Sans для PDF (лицензия OFL)
 │   └── img/                 # hero (jpg + webp: 640, 1024, отдельный кадр для телефона), иконки сайта
 │
-├── tests/test_analytics.js  # тесты аналитики (node)
+├── tests/                   # pytest: валидация, KYC, кошелёк, выпуски, DvP, выплаты, API, блокчейн
+│   └── test_analytics.js    # тесты аналитики (node)
+├── pytest.ini
 └── docs/screenshots/        # скриншоты для README
 ```
 

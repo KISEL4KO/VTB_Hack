@@ -14,8 +14,6 @@
       <h1 class="issue-hero__title">{{ issue.title }}</h1>
       <p class="issue-hero__sub">Эмитент: {{ issue.issuer_name }} · номинал {{ issue.price_per_cfa|rub }} · купон {{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} % годовых ·
         погашение {{ issue.maturity_date|ddmm }}</p>
-      {% if issue.published_at %}<p class="published-line"><span class="badge badge--published">Опубликовано</span>
-        Решение о выпуске опубликовано {{ issue.published_at[:10]|ddmm }} · <a href="{{ url_for('doc_decision', issue_id=issue.id) }}" target="_blank">открыть PDF</a></p>{% endif %}
       {% set block = buy_block_reason(me, issue) %}
       {% if block and issue.status == 'SUBSCRIPTION' %}<p class="buy-note">🔒 {{ block }} — так указано в Решении о выпуске (раздел 12)</p>{% endif %}
       <div class="issue-hero__actions">

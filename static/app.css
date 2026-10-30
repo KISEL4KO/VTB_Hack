@@ -11,8 +11,6 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 .empty-cell { text-align: center; color: var(--text-secondary); padding: 22px 12px !important; }
 .form-error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 10px; padding: 10px 14px; font-size: 14px; margin: 10px 0; }
-.demo-hint { font-size: 13px; color: var(--text-secondary); background: var(--blue-soft); border-radius: 12px; padding: 10px 14px; margin: 12px 0 18px; line-height: 1.6; }
-.demo-hint code { background: #fff; padding: 1px 6px; border-radius: 6px; }
 .static-value { padding: 10px 12px; background: var(--bg-muted); border: 1px solid var(--border-color); border-radius: 10px; font-weight: 600; }
 .field-hint { color: var(--text-secondary); display: block; margin-top: 4px; }
 .toast { position: fixed; right: 20px; bottom: 20px; background: #0F172A; color: #fff; padding: 12px 18px; border-radius: 12px; z-index: 1000; font-size: 14px; max-width: 360px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
@@ -47,7 +45,6 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
 .field-error { display: block; font-size: 12px; font-weight: 600; line-height: 1.35; color: #fff; background: rgba(185,28,28,.88); border-radius: 8px; padding: 4px 8px; }
 .field-error::before { content: "⚠ "; }
 .form-field:has(.field-error) .field-hint { display: none; }
-.demo-hint { margin-top: 18px; }
 
 @media (max-width: 640px) {
   .auth-grid { padding: 24px 16px; }
@@ -477,3 +474,9 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
     transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .cfa-card:hover, .btn-primary:hover, .top-header__cabinet-btn:hover { transform: none; }
 }
+
+/* Даты в карточке выпуска: выпуск, приём заявок, погашение — строками «подпись — значение» */
+.cfa-card__dates { margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; }
+.cfa-card__date { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-top: 1px dashed var(--border-color); font-size: 12.5px; }
+.cfa-card__date dt { color: var(--text-secondary); margin: 0; white-space: nowrap; }
+.cfa-card__date dd { margin: 0; font-weight: 600; color: var(--text-main); text-align: right; font-variant-numeric: tabular-nums; }
