@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Обновить платформу на ВМ до свежей версии из git и перезапустить службы.
 #   cd ~/VTB_Hack && bash deploy/cloudru/update.sh
-RESET_DB=1 — заодно пересоздать базу с демо-данными (нужно, если поменялась схема таблиц).
+RESET_DB=1
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
