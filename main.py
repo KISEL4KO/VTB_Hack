@@ -41,6 +41,18 @@ app.secret_key = os.environ.get("SECRET_KEY", "cfa-dev-secret-change-me")
 app.teardown_appcontext(close_db)
 register_filters(app)
 
+
+@app.url_defaults
+def static_version(endpoint, values):
+    """Ссылки на CSS, JS и картинки получают ?v=<время изменения файла>.
+    После обновления кода меняется адрес файла, и браузер сразу берёт новый вместо старого из кэша
+    (nginx на ВМ разрешает браузеру хранить статику час, без этого новая разметка показывалась со старым CSS)."""
+    if endpoint == "static" and "filename" in values and "v" not in values:
+        try:
+            values["v"] = int(os.stat(os.path.join(app.static_folder, values["filename"])).st_mtime)
+        except OSError:
+            pass
+
 # Автоматическая инициализация базы данных при старте приложения.
 # init_db выполняет CREATE TABLE IF NOT EXISTS, поэтому её безопасно вызывать каждый раз:
 # существующие таблицы и данные не трогаются, а пустой файл cfa.db получит все таблицы.
