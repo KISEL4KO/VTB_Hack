@@ -14,7 +14,7 @@ from functools import wraps
 from flask import Response, abort, g, jsonify, redirect, request, session, url_for
 
 import database_setup as db
-from validators import ISSUER_ROLES, PERSON_ROLES, ROLE_FULL, ROLE_SHORT, SIGN_PEP_ROLES
+from validators import ISSUER_ROLES, PERSON_ROLES, ROLE_FULL, ROLE_SHORT, ROV_INVESTORS_BADGE, SIGN_PEP_ROLES
 from blockchain import Chain, ISSUE_STATUS as CHAIN_ISSUE_STATUS
 
 # ------------------------------------------------------------------------------
@@ -190,8 +190,30 @@ CHAIN_METHODS = {
 # ------------------------------------------------------------------------------
 # Фильтры шаблонов
 # ------------------------------------------------------------------------------
+def issue_audience(issue) -> str:
+    """Круг лиц выпуска из Решения о выпуске (раздел 12): all / business / qualified."""
+    try:
+        return json.loads(issue["rov_json"] or "{}").get("investors") or ("qualified" if issue["only_qual"] else "all")
+    except (TypeError, ValueError, KeyError, IndexError):
+        return "all"
+
+
+def buy_block_reason(user, issue) -> str:
+    """Почему этот участник не может купить выпуск по кругу лиц ('' — может). Кнопка «Купить» на витрине неактивна."""
+    if not user or user["role"] == "ADMIN":
+        return ""
+    audience = issue_audience(issue)
+    if audience == "business" and user["role"] not in ISSUER_ROLES:
+        return "Только для ИП и компаний"
+    if audience == "qualified" and user["role"] in PERSON_ROLES and not user["is_qualified"]:
+        return "Только для квал. инвесторов"
+    return ""
+
+
 def register_filters(app):
-    app.jinja_env.globals.update(issuer_roles=ISSUER_ROLES, person_roles=PERSON_ROLES, sign_pep_roles=SIGN_PEP_ROLES)
+    app.jinja_env.globals.update(issuer_roles=ISSUER_ROLES, person_roles=PERSON_ROLES, sign_pep_roles=SIGN_PEP_ROLES,
+                                 issue_audience=issue_audience, buy_block_reason=buy_block_reason,
+                                 audience_badge=ROV_INVESTORS_BADGE)
 
     @app.template_filter("role_short")
     def role_short(value):

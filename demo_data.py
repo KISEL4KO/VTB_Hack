@@ -98,7 +98,8 @@ def _rov(title, price, min_qty, max_qty, rate, investors="all", days_to_maturity
         "max_order_qty": "", "placement_start": today.isoformat(),
         "placement_end": (today + timedelta(days=30)).isoformat(),
         "maturity_date": (today + timedelta(days=days_to_maturity)).isoformat(),
-        "payment_method": "wallet", "investors": investors, "buyback": "no", "collateral": "no",
+        "payment_method": "wallet", "investors": investors, "buyback": "no", "collateral_type": "none",
+        "liability_limited": "yes",
         "early_redemption": "no", "risks": ["market", "liquidity", "credit", "operational", "legal"],
         "signer_name": "Смирнов Алексей Викторович", "signer_position": "Генеральный директор", "confirm": "true",
         **validators.ROV_DEFAULTS,
@@ -171,10 +172,25 @@ def seed(conn, chain) -> None:
     i5 = db.save_issue_decision(conn, ip, _rov(
         "ЦФА ИП Волков 01", 10_000, 20, 100, 22, days_to_maturity=210,
         issuer_full_name="Индивидуальный предприниматель Волков Андрей Николаевич", ogrn_date="2019-06-03",
-        beneficiary="Волков Андрей Николаевич — индивидуальный предприниматель, 100 %", website="",
-        coupon_period="monthly", collateral="yes", collateral_desc="Залог оборудования кофейни по договору залога "
-        "№ 1/2026 оценочной стоимостью 1 500 000 ₽", signer_name="Волков Андрей Николаевич",
+        beneficiary="Волков Андрей Николаевич — индивидуальный предприниматель, 100 %", website="", no_website="true",
+        coupon_period="monthly", collateral_type="pledge", liability_limited="no",
+        collateral_provider="ИП Волков Андрей Николаевич, ИНН 772400001214",
+        collateral_subject="залог оборудования кофейни по договору залога № 1/2026 оценочной стоимостью 1 500 000 ₽",
+        collateral_terms="Залог обеспечивает возврат номинала и выплату дохода; при неисполнении обязательств "
+        "предмет залога реализуется в пользу владельцев ЦФА",
+        guarantor_signer="ИП Волков Андрей Николаевич (залогодатель)", guarantor_confirm="true",
+        signer_name="Волков Андрей Николаевич",
         signer_position="Индивидуальный предприниматель"))["issue_id"]
     db.approve_issue(conn, chain, admin_id, i5, "ИП вправе выпускать ЦФА (259-ФЗ, ст. 2), реквизиты сходятся")
     db.buy_cfa_on_showcase(conn, investor, i5, 5, "1234", chain)
     db.buy_cfa_on_showcase(conn, fund, i5, 10, "UKEP", chain)
+
+    # Выпуск 6: только для ИП и компаний (раздел 12), с поручительством — у физлица кнопка «Купить» неактивна
+    i6 = db.save_issue_decision(conn, issuer, _rov(
+        "ЦФА Демо-Лизинг 03", 50_000, 10, 60, 18, investors="business", days_to_maturity=540,
+        collateral_type="surety", collateral_provider="ООО «Демо-Холдинг», ИНН 7701234567",
+        collateral_subject="поручительство на всю сумму номинала и фиксированного дохода",
+        collateral_terms="Поручитель отвечает перед владельцами ЦФА солидарно с Эмитентом в пределах номинала и дохода",
+        guarantor_signer="ООО «Демо-Холдинг», генеральный директор Кузнецов О. И.", guarantor_confirm="true"))["issue_id"]
+    db.approve_issue(conn, chain, admin_id, i6, "Поручительство подписано, круг лиц — ИП и компании")
+    db.buy_cfa_on_showcase(conn, fund, i6, 12, "UKEP", chain)

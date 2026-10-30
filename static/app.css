@@ -401,3 +401,79 @@ a.sidebar-link.sidebar-link--active { color: inherit; }
 @media (max-width: 960px) { .pay-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pay-table td:nth-child(4), .pay-table td:nth-child(5) { white-space: nowrap; }
 .nowrap { white-space: nowrap; }
+
+/* ===================== Решение о выпуске: переключатели, раскрывающиеся блоки, проверка ===================== */
+.rov-form .light-field input[type=checkbox], .rov-form .light-field input[type=radio] { width: 16px; min-width: 16px; height: 16px; padding: 0; flex: 0 0 auto; }
+.light-field label.check { display: flex; font-weight: 500; }
+.light-label { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; background: var(--bg-muted); border: 1px solid var(--border-color);
+  border-radius: 12px; }
+.seg__opt { position: relative; flex: 1 1 auto; cursor: pointer; }
+.seg__opt input { position: absolute; opacity: 0; pointer-events: none; }
+.seg__opt span { display: block; text-align: center; padding: 9px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600;
+  color: var(--text-secondary); transition: background-color .15s ease, color .15s ease, box-shadow .15s ease; }
+.seg__opt:hover span { color: var(--text-main); }
+.seg__opt input:checked + span { background: #fff; color: var(--blue-header-dark); box-shadow: 0 1px 4px rgba(15, 23, 42, .12); }
+.seg__opt input:focus-visible + span { outline: 2px solid var(--blue-primary); outline-offset: 1px; }
+.seg.is-invalid-group { border: 2px solid #F87171; background: #FFF1F2; }
+.seg-hint { margin-top: 8px; }
+.seg-hint[hidden] { display: none; }
+.check--inline { margin-top: 6px; font-weight: 500; }
+.rov-subhead { margin: 18px 0 10px; font-size: 13.5px; }
+
+/* Блок, который появляется по выбору: плавно раскрывается по высоте (анимация только после загрузки формы) */
+.reveal { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; }
+.reveal > * { overflow: hidden; min-height: 0; }
+.reveal.is-open { grid-template-rows: 1fr; opacity: 1; visibility: visible; margin-top: 12px; }
+.rov-form.is-ready .reveal { transition: grid-template-rows .22s ease, opacity .18s ease, margin-top .22s ease, visibility .22s; }
+
+.debt-box { margin-top: 14px; border: 1px solid #BFDBFE; background: #F8FBFF; border-radius: 14px; padding: 14px 16px; }
+.debt-box--locked { border-color: var(--border-color); background: var(--bg-muted); }
+.debt-box__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13.5px; }
+.debt-formula { margin: 0 0 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px;
+  background: #fff; border: 1px dashed #BFDBFE; border-radius: 10px; padding: 8px 10px; }
+.debt-box .ui-table-wrap { margin: 8px 0; max-height: 320px; overflow: auto; }
+.lock-tag { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.debt-list { margin: 0 0 8px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; }
+.debt-list li { margin-bottom: 4px; }
+
+.rov-check { border: 1px solid #FDE68A; background: #FFFBEB; border-radius: 14px; padding: 12px 16px; font-size: 13.5px;
+  transition: background-color .2s ease, border-color .2s ease; }
+.rov-check__title { display: block; margin-bottom: 4px; }
+.rov-check__missing { margin: 0; line-height: 1.7; color: #92400E; }
+.rov-check__missing > span { font-weight: 700; }
+.rov-check__item { background: none; border: 0; padding: 0; font: inherit; color: #92400E; text-decoration: underline;
+  text-decoration-style: dotted; text-underline-offset: 3px; cursor: pointer; }
+.rov-check__item:hover { color: #78350F; }
+.rov-check--ok { border-color: #A7F3D0; background: #ECFDF5; }
+.rov-check--ok .rov-check__missing { color: #065F46; }
+.rov-check--ok .rov-check__missing::before { content: "✓ "; font-weight: 800; }
+
+/* Значок «опубликовано» на карточке и странице выпуска */
+.published-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 8px 0 0; font-size: 12.5px; color: var(--text-secondary); }
+.published-line a { color: var(--blue-header-dark); font-weight: 600; text-decoration: none; }
+.published-line a:hover { text-decoration: underline; }
+.badge--published { background: #ECFDF5; color: #047857; }
+.buy-note { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: #FFFBEB; color: #92400E; font-size: 12.5px; line-height: 1.4; }
+
+/* ===================== Анимации: только там, где они помогают понять, что произошло =====================
+   • окно (покупка, кошелёк) — появляется, а не «выскакивает»;
+   • уведомление внизу — выезжает, чтобы его заметили;
+   • поля по выбору в Решении о выпуске — раскрываются по высоте (см. .reveal);
+   • нажатие кнопки — лёгкий отклик под пальцем.
+   Всё короткое (≤ 0,22 с) и выключается настройкой системы «Уменьшить движение». */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.modal-backdrop:not(.hidden) { animation: fade-in .16s ease-out; }
+.modal-backdrop:not(.hidden) .modal-card { animation: pop-in .2s ease-out; }
+.toast:not(.hidden) { animation: toast-in .2s ease-out; }
+.btn-primary:not(:disabled):active, .btn-secondary:active, .btn-danger:not(:disabled):active,
+.top-header__cabinet-btn:active, .chip:active { transform: scale(.98); }
+.field-error { animation: fade-in .15s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .cfa-card:hover, .btn-primary:hover, .top-header__cabinet-btn:hover { transform: none; }
+}

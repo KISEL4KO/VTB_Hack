@@ -126,6 +126,107 @@ if (rovForm) {
   }
   ['price_per_cfa', 'max_qty', 'min_qty'].forEach(function (n) { rovForm[n].addEventListener('input', rovVolume); });
   rovVolume();
+
+  // Текущее значение поля формы: у радиокнопок — выбранная, у остальных — value
+  function rovValue(name) {
+    var els = rovForm.querySelectorAll('[name="' + name + '"]');
+    if (!els.length) return '';
+    if (els[0].type === 'radio') { var c = rovForm.querySelector('[name="' + name + '"]:checked'); return c ? c.value : ''; }
+    return els[0].value;
+  }
+
+  // Блоки, которые появляются по выбору (обеспечение, «ограничена», условия выкупа, подпись поручителя).
+  // Закрытый блок недоступен с клавиатуры (inert), и его поля не требуются при проверке.
+  function rovReveal() {
+    rovForm.querySelectorAll('.reveal[data-show-if]').forEach(function (box) {
+      var v = rovValue(box.dataset.showIf), show;
+      if (box.dataset.showIn !== undefined) show = box.dataset.showIn.split(',').indexOf(v) >= 0;
+      else show = box.dataset.showNot.split(',').indexOf(v) < 0;
+      box.classList.toggle('is-open', show);
+      if (show) box.removeAttribute('inert'); else box.setAttribute('inert', '');
+    });
+    rovForm.querySelectorAll('.seg-hint').forEach(function (h) {
+      h.hidden = rovValue(h.dataset.for) !== h.dataset.value;
+    });
+    var noSite = rovForm.querySelector('[name="no_website"]'), site = rovForm.querySelector('[name="website"]');
+    if (noSite && site) { site.disabled = noSite.checked; if (noSite.checked) setFieldState(site, '', false); }
+  }
+
+  // Раздел 3: формула купона и плановый график — из ставки, цены, частоты и дат (те же правила, что в документе)
+  function rovSchedule() {
+    var box = $('#rov-schedule'), formula = $('#rov-formula');
+    if (!box || !window.CFAAnalytics) return;
+    var price = +String(rovValue('price_per_cfa')).replace(/\s/g, '') || 0;
+    var rate = parseFloat(String(rovValue('coupon_rate')).replace(',', '.'));
+    var rows = CFAAnalytics.schedule({ price: price, rate: rate, period: rovValue('coupon_period'),
+                                       start: rovValue('placement_end'), maturity: rovValue('maturity_date') });
+    if (!rows.length || isNaN(rate)) {
+      formula.textContent = 'Заполните ставку, цену (раздел 5), частоту выплат, окончание приёма заявок (раздел 6) и дату погашения.';
+      box.innerHTML = '';
+      return;
+    }
+    var nf = function (v, d) { return v.toLocaleString('ru-RU', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); };
+    var dd = function (iso) { return iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4); };
+    formula.textContent = 'Купон на 1 ЦФА = Цена (' + nf(price) + ' ₽) × ' + String(rate).replace('.', ',') +
+      ' % годовых × число дней периода / 365';
+    var period = rovValue('coupon_period');
+    var lead = period === 'maturity' ? 'Доход выплачивается один раз — в дату погашения.'
+      : 'Купон выплачивается ' + (period === 'monthly' ? 'раз в месяц' : 'раз в квартал') + ': ' +
+        rows.map(function (r) { return dd(r.date).slice(0, 5); }).slice(0, 8).join(', ') + (rows.length > 8 ? '…' : '') + '.';
+    var shown = rows.length > 13 ? rows.slice(0, 6).concat([null]).concat(rows.slice(-3)) : rows;
+    box.innerHTML = '<p class="rov-note">' + lead + ' Погашение ' + dd(rows[rows.length - 1].date) + '.</p>' +
+      '<div class="ui-table-wrap"><table class="ui-table ui-table--plain ui-table--compact"><thead><tr><th>№</th><th>Дата выплаты</th>' +
+      '<th>Дней</th><th>Купон на 1 ЦФА</th></tr></thead><tbody>' +
+      shown.map(function (r) {
+        if (!r) return '<tr><td colspan="4" class="muted">…</td></tr>';
+        var no = rows.indexOf(r) + 1;
+        return '<tr><td>' + no + '</td><td>' + dd(r.date) + (r.principal ? ' + номинал' : '') + '</td><td>' + r.days +
+          '</td><td>' + nf(r.coupon, 2) + ' ₽</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Проверка перед отправкой: что из обязательного ещё не заполнено. Пока список не пуст — кнопка неактивна.
+  function rovMissing() {
+    var out = [];
+    rovForm.querySelectorAll('[data-req]').forEach(function (el) {
+      if (el.closest('.reveal:not(.is-open)') || el.disabled) return;
+      var ok;
+      if (el.matches('[data-group]')) {
+        var min = +(el.dataset.reqMin || 1);
+        ok = el.querySelectorAll('input:checked').length >= min;
+      } else if (el.type === 'checkbox') ok = el.checked;
+      else ok = String(el.value || '').trim() !== '';
+      if (!ok) out.push(el);
+    });
+    return out;
+  }
+  function rovCheck() {
+    var missing = rovMissing(), box = $('#rov-check'), text = $('#rov-missing'), btn = $('#rov-submit');
+    if (!box) return;
+    box.classList.toggle('rov-check--ok', !missing.length);
+    btn.disabled = missing.length > 0;
+    btn.title = missing.length ? 'Сначала заполните всё из списка выше' : '';
+    if (!missing.length) { text.textContent = 'Всё обязательное заполнено — можно подписывать и отправлять.'; return; }
+    text.innerHTML = '<span>Не хватает:</span> ';
+    missing.slice(0, 8).forEach(function (el, i) {
+      var a = document.createElement('button');
+      a.type = 'button'; a.className = 'rov-check__item'; a.textContent = el.dataset.req;
+      a.addEventListener('click', function () {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        var focusable = el.matches('input, select, textarea') ? el : el.querySelector('input');
+        if (focusable) setTimeout(function () { focusable.focus({ preventScroll: true }); }, 350);
+      });
+      if (i) text.appendChild(document.createTextNode(' · '));
+      text.appendChild(a);
+    });
+    if (missing.length > 8) text.appendChild(document.createTextNode(' и ещё ' + (missing.length - 8)));
+  }
+  function rovRefresh() { rovReveal(); rovSchedule(); rovCheck(); }
+  rovForm.addEventListener('input', rovRefresh);
+  rovForm.addEventListener('change', rovRefresh);
+  rovRefresh();
+  // при открытии формы закрытые блоки не «выезжают» — анимация только на действия пользователя
+  requestAnimationFrame(function () { requestAnimationFrame(function () { rovForm.classList.add('is-ready'); }); });
   // Исправленное поле перестаёт быть красным, как только его меняют
   rovForm.addEventListener('input', function (e) {
     var el = e.target;
@@ -141,6 +242,7 @@ if (rovForm) {
     var d = Object.fromEntries(fd.entries());
     d.risks = fd.getAll('risks');
     d.confirm = rovForm.confirm.checked ? 'true' : '';
+    d.no_website = rovForm.no_website && rovForm.no_website.checked ? 'true' : '';
     var id = rovForm.dataset.issueId;
     var btn = rovForm.querySelector('[type="submit"]');
     btn.disabled = true;
@@ -161,7 +263,7 @@ if (rovForm) {
       showError('rov-error', err.message);
       var first = rovForm.querySelector('.is-invalid, .is-invalid-group');
       if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } finally { btn.disabled = false; }
+    } finally { btn.disabled = false; rovCheck(); }
   });
 }
 

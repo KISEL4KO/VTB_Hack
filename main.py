@@ -144,8 +144,9 @@ def issue_page(issue_id):
     owner = me and (me["role"] == "ADMIN" or me["id"] == issue["issuer_id"])
     if issue["status"] not in PUBLIC_STATUSES and not owner:
         abort(404)
+    rov = json.loads(issue["rov_json"])
     return render_template("issue_page.html", issue=issue, payload=issue_payload(conn, issue),
-                           bench=get_benchmarks(conn), rov=json.loads(issue["rov_json"]))
+                           bench=get_benchmarks(conn), rov=rov, sm=validators.rov_summary(rov))
 
 
 @app.route("/login")
@@ -286,7 +287,8 @@ def issuer_new():
         "placement_start": start.isoformat(), "placement_end": (start + timedelta(days=30)).isoformat(),
         "maturity_date": (start + timedelta(days=395)).isoformat(),
         "payment_method": "wallet", "investors": "all", "buyback": "no", "buyback_terms": "",
-        "collateral": "no", "collateral_desc": "", "early_redemption": "no",
+        "no_website": False, "collateral_type": "", "collateral_provider": "", "collateral_subject": "",
+        "collateral_terms": "", "liability_limited": "", "guarantor_signer": "", "early_redemption": "no",
         "risks": ["market", "liquidity", "credit", "operational", "legal"], "risks_extra": "",
         "signer_name": "", "signer_position": "Генеральный директор", **validators.ROV_DEFAULTS,
         **ip,
@@ -342,6 +344,9 @@ def _rov_choices(issuer_id: int, issue_id: int | None = None):
     conn = get_db()
     return {"risks_all": validators.ROV_RISKS, "coupon_periods": validators.ROV_COUPON_PERIODS,
             "payments": validators.ROV_PAYMENT, "investors_all": validators.ROV_INVESTORS,
+            "investors_short": validators.ROV_INVESTORS_SHORT, "collateral_types": validators.ROV_COLLATERAL,
+            "smart_contract_text": validators.ROV_SMART_CONTRACT, "debt_clauses": validators.DEBT_CLAUSES,
+            "debt_law_ref": validators.DEBT_LAW_REF,
             "bench": get_benchmarks(conn), "track": issuer_track(conn, issuer_id, exclude_issue=issue_id)}
 
 

@@ -13,7 +13,7 @@
 <div class="light-form-card">Выпускать ЦФА могут только юридические лица и ИП (259-ФЗ).</div>
 {% else %}
 <ol class="flow-steps">
-  <li><b>1. Решение о выпуске</b><span>заполняете форму из 13 разделов и подписываете УКЭП</span></li>
+  <li><b>1. Решение о выпуске</b><span>заполняете форму из 15 разделов и подписываете УКЭП</span></li>
   <li><b>2. Проверка</b><span>администратор сверяет документ и одобряет или возвращает на доработку</span></li>
   <li><b>3. Сбор заявок</b><span>выпуск на витрине и в смарт-контракте, деньги инвесторов в холде</span></li>
   <li><b>4. DvP</b><span>закрываете сбор — ЦФА инвесторам, деньги вам одной транзакцией</span></li>
@@ -29,7 +29,9 @@
       <tr>
         <td>CFA-{{ '%06d' % i.id }}</td>
         <td>{{ i.title }}<br><small>размещение {{ i.placement_start|ddmm }} — {{ i.placement_end|ddmm }}</small>
-          {% if i.status == 'REJECTED' %}<div class="reject-note">Замечания: {{ i.reject_reason }}</div>{% endif %}</td>
+          {% if i.status == 'REJECTED' %}<div class="reject-note">Замечания: {{ i.reject_reason }}</div>{% endif %}
+          {% if i.published_at %}<div class="published-line"><span class="badge badge--published">Опубликовано</span>
+            {{ i.published_at[:10]|ddmm }} · <a href="{{ url_for('doc_decision', issue_id=i.id) }}" target="_blank">открыть PDF</a></div>{% endif %}</td>
         <td>{{ i.price_per_cfa|rub }}</td>
         <td>{{ i.collected_qty|num }} / {{ i.max_qty|num }} <small>(мин. {{ i.min_qty|num }})</small></td>
         <td><span class="badge badge--{{ st[1] }}">{{ st[0] }}</span></td>

@@ -355,15 +355,38 @@ ROV_COUPON_PERIODS = {"maturity": "единовременно в дату пог
                       "monthly": "ежемесячно"}
 ROV_PAYMENT = {"wallet": "цифровыми рублями с кошелька участника на Платформе (смарт-контракт DvP)",
                "noncash": "безналичными рублями на счёт, привязанный к кошельку участника"}
-ROV_INVESTORS = {"all": "все участники Платформы (для неквалифицированных физлиц — в пределах 600 000 ₽ в год)",
-                 "qualified": "только квалифицированные инвесторы и юридические лица"}
+# Раздел 12 «Круг лиц»: кто может купить ЦФА выпуска
+ROV_INVESTORS = {"all": "все пользователи Платформы (неквалифицированные физлица — не больше чем на 600 000 ₽ в год)",
+                 "business": "только индивидуальные предприниматели и юридические лица",
+                 "qualified": "только квалифицированные инвесторы (юридические лица Платформа признаёт квалифицированными)"}
+ROV_INVESTORS_SHORT = {"all": "Все пользователи", "business": "Только ИП и компании",
+                       "qualified": "Только квалифицированные инвесторы"}
+# Значок выпуска на витрине и странице выпуска
+ROV_INVESTORS_BADGE = {"all": "Для всех инвесторов", "business": "Для ИП и компаний", "qualified": "Для квал. инвесторов"}
+
+# Раздел 10 «Обеспечение»
+ROV_COLLATERAL = {"none": "Нет", "surety": "Поручительство", "pledge": "Залог", "guarantee": "Гарантия"}
+
+# Раздел 8 «Смарт-контракт» — текст стоит сам, эмитент его не редактирует
+ROV_SMART_CONTRACT = ("Размещение ЦФА, возврат денег, если выпуск не состоялся, выплаты дохода и погашение выполняет "
+                      "смарт-контракт CFAPlatform в распределённом реестре Платформы автоматически.")
+
+# Долговые ЦФА: обязательные положения Решения о выпуске (259-ФЗ ст. 3 ч. 1.2; после перехода на 282-ФЗ — ст. 7 ч. 15).
+# Конструктор вставляет их в документ сам — эмитент их не пишет и не может удалить.
+DEBT_LAW_REF = "259-ФЗ, ст. 3, ч. 1.2"
+DEBT_CLAUSES = [
+    "ЦФА являются долговыми цифровыми финансовыми активами.",
+    "Изменение вида и объёма обязательств по ЦФА не допускается.",
+    "Каждый ЦФА выпуска независимо от даты его приобретения удостоверяет одинаковые (единые и неизменные) вид "
+    "и объём обязательств Эмитента.",
+    "Если Эмитент становится обладателем выпущенных им ЦФА, записи о таких ЦФА погашаются.",
+]
 ROV_DEFAULTS = {
     "redemption_order": "Погашение осуществляется в дату погашения путём перечисления денежных средств в размере "
                         "номинальной стоимости ЦФА и начисленного фиксированного дохода на кошелёк владельца ЦФА "
                         "на Платформе. Ранее погашенные ЦФА повторно не выпускаются.",
-    "liability": "Ответственность Эмитента ограничивается суммой номинальной стоимости ЦФА и начисленного "
-                 "фиксированного дохода. За просрочку исполнения обязательств Эмитент несёт ответственность "
-                 "в соответствии с законодательством Российской Федерации.",
+    "liability": "суммой номинальной стоимости ЦФА и начисленного фиксированного дохода; за просрочку исполнения "
+                 "обязательств Эмитент отвечает в соответствии с законодательством Российской Федерации.",
     "disputes": "Споры разрешаются в суде по месту нахождения Эмитента после соблюдения претензионного порядка. "
                 "Срок ответа на претензию — 15 рабочих дней.",
 }
@@ -394,6 +417,107 @@ def _date(f: dict, name: str, errors: dict, label: str):
         return None
 
 
+# ------------------------------------------------------------------------------
+# График выплат долговых ЦФА: те же правила, что в database_setup.coupon_schedule и analytics.js
+# ------------------------------------------------------------------------------
+COUPON_STEP_MONTHS = {"monthly": 1, "quarterly": 3, "maturity": 0}
+
+
+def add_months(d: date, n: int) -> date:
+    """31 января + 1 месяц → 28/29 февраля (как в analytics.js)."""
+    y, m = divmod(d.month - 1 + n, 12)
+    y, m = d.year + y, m + 1
+    last = (date(y + (m == 12), m % 12 + 1, 1) - date(y, m, 1)).days
+    return date(y, m, min(d.day, last))
+
+
+def coupon_periods(start: date, maturity: date, period: str) -> list[dict]:
+    """Купонные периоды от даты начала начисления до погашения: [{no, start, end, days}].
+    Шаг — 1 или 3 месяца; хвост короче 15 дней присоединяется к последнему периоду."""
+    if maturity <= start:
+        return []
+    step = COUPON_STEP_MONTHS.get(period, 0)
+    ends = []
+    if step:
+        k = 1
+        while True:
+            d = add_months(start, step * k)
+            if (maturity - d).days < 15:
+                break
+            ends.append(d)
+            k += 1
+    ends.append(maturity)
+    out, prev = [], start
+    for no, end in enumerate(ends, 1):
+        out.append({"no": no, "start": prev.isoformat(), "end": end.isoformat(), "days": (end - prev).days})
+        prev = end
+    return out
+
+
+def planned_schedule(rov: dict) -> list[dict]:
+    """Плановый график для Решения о выпуске: если выпуск будет размещён (DvP) в последний день приёма заявок.
+    Купон на 1 ЦФА = цена × ставка × дни периода / 365 (с копейками)."""
+    try:
+        start = date.fromisoformat(rov["placement_end"])
+        maturity = date.fromisoformat(rov["maturity_date"])
+        price, rate = float(rov["price_per_cfa"]), float(rov["coupon_rate"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    rows = coupon_periods(start, maturity, rov.get("coupon_period", "maturity"))
+    for r in rows:
+        r["coupon"] = round(price * rate / 100 * r["days"] / 365, 2)
+    return rows
+
+
+def pct_ru(v) -> str:
+    """18.5 → «18,5», 22.0 → «22»."""
+    try:
+        return f"{float(v):g}".replace(".", ",")
+    except (TypeError, ValueError):
+        return str(v or "—")
+
+
+def coupon_formula(rov: dict) -> str:
+    """Формула купона с подставленными цифрами — для формы и PDF."""
+    rate = pct_ru(rov.get("coupon_rate"))
+    price = f"{int(rov.get('price_per_cfa') or 0):,}".replace(",", " ")
+    return f"Купон на 1 ЦФА = Цена ({price} ₽) × {rate} % годовых × число дней купонного периода / 365"
+
+
+def rov_summary(rov: dict) -> dict:
+    """Готовые тексты разделов для показа (админка, страница выпуска, PDF).
+    Понимает и новые документы (разделы 1–15), и сохранённые раньше (обеспечение да/нет, ответственность текстом)."""
+    ctype = rov.get("collateral_type") or ("pledge" if rov.get("collateral") == "yes" else "none")
+    if ctype == "none":
+        collateral = "не предусмотрено"
+    elif rov.get("collateral_subject"):
+        collateral = (f"{ROV_COLLATERAL[ctype].lower()}: {rov['collateral_subject']}. Предоставляет: "
+                      f"{rov.get('collateral_provider', '')}. Условия: {rov.get('collateral_terms', '')}")
+    else:
+        collateral = "предусмотрено: " + (rov.get("collateral_desc") or "")
+    limited = rov.get("liability_limited") or ("yes" if rov.get("liability") else "no")
+    if limited == "no":
+        liability = "не ограничена"
+    elif rov.get("liability_limited"):
+        liability = "ограничена: " + rov.get("liability", "")
+    else:
+        liability = rov.get("liability", "")          # старый документ: раздел был готовым абзацем
+    return {
+        "website": rov.get("website") or ("сайта нет" if rov.get("no_website") else "—"),
+        "collateral_type": ctype, "collateral_name": ROV_COLLATERAL.get(ctype, "—"), "collateral": collateral,
+        "liability_limited": limited, "liability": liability,
+        "investors": ROV_INVESTORS.get(rov.get("investors"), "—"),
+        "investors_badge": ROV_INVESTORS_BADGE.get(rov.get("investors"), ROV_INVESTORS_BADGE["all"]),
+        "guarantor": rov.get("guarantor_signer", ""),
+        "smart_contract": rov.get("smart_contract") or ROV_SMART_CONTRACT,
+        "debt_clauses": rov.get("debt_clauses") or DEBT_CLAUSES,
+        "formula": coupon_formula(rov), "schedule": planned_schedule(rov),
+    }
+
+
+WEBSITE_RE = re.compile(r"^(https?://)?([\w-]+\.)+[\w-]{2,}(/\S*)?$", re.IGNORECASE)
+
+
 def validate_rov(f: dict) -> tuple[dict, dict]:
     """Проверяет форму «Решения о выпуске». Возвращает (rov, errors)."""
     errors: dict[str, str] = {}
@@ -416,7 +540,11 @@ def validate_rov(f: dict) -> tuple[dict, dict]:
         errors["ogrn_date"] = "Дата не может быть в будущем."
     rov["ogrn_date"] = ogrn_date.isoformat() if ogrn_date else ""
     rov["beneficiary"] = text("beneficiary", "Бенефициарный владелец", 3, 300)
-    rov["website"] = text("website", "Сайт", 4, 200, required=False)
+    # Сайт: Решение о выпуске публикуется на сайте эмитента — поле обязательно, если не отмечено «Сайта нет»
+    rov["no_website"] = str(f.get("no_website", "")).lower() in ("true", "on", "1", "yes")
+    rov["website"] = "" if rov["no_website"] else text("website", "Сайт эмитента", 4, 200)
+    if rov["website"] and "website" not in errors and not WEBSITE_RE.match(rov["website"]):
+        errors["website"] = "Адрес сайта, например https://example.ru — или отметьте «Сайта нет»."
 
     # Раздел 3 — вид и объём прав
     rov["title"] = text("title", "Наименование выпуска", 3, 80)
@@ -469,28 +597,53 @@ def validate_rov(f: dict) -> tuple[dict, dict]:
     rov["placement_end"] = end.isoformat() if end else ""
     rov["maturity_date"] = maturity.isoformat() if maturity else ""
 
-    # Разделы 8–12
+    # Раздел 9 — оплата
     rov["payment_method"] = f.get("payment_method", "")
     if rov["payment_method"] not in ROV_PAYMENT:
         errors["payment_method"] = "Выберите способ оплаты."
-    rov["liability"] = text("liability", "Ограничение ответственности", 20, 3000, default=ROV_DEFAULTS["liability"])
+
+    # Раздел 10 — обеспечение: нет / поручительство / залог / гарантия; если есть — кто, что и на каких условиях
+    rov["collateral_type"] = f.get("collateral_type", "")
+    if rov["collateral_type"] not in ROV_COLLATERAL:
+        errors["collateral_type"] = "Выберите, есть ли обеспечение."
+        rov["collateral_type"] = "none"
+    has_collateral = rov["collateral_type"] != "none"
+    rov["collateral_provider"] = text("collateral_provider", "Кто обеспечивает", 5, 300, required=has_collateral) \
+        if has_collateral else ""
+    rov["collateral_subject"] = text("collateral_subject", "Что именно", 5, 1000, required=has_collateral) \
+        if has_collateral else ""
+    rov["collateral_terms"] = text("collateral_terms", "Условия обеспечения", 10, 2000, required=has_collateral) \
+        if has_collateral else ""
+    # Совместимость с аналитикой и старыми документами: «есть обеспечение» + описание одной строкой
+    rov["collateral"] = "yes" if has_collateral else "no"
+    rov["collateral_desc"] = (f"{ROV_COLLATERAL[rov['collateral_type']]}: {rov['collateral_subject']}. "
+                              f"Предоставляет: {rov['collateral_provider']}. Условия: {rov['collateral_terms']}"
+                              if has_collateral else "")
+
+    # Раздел 11 — ответственность: не ограничена или ограничена прямо названным способом
+    rov["liability_limited"] = f.get("liability_limited", "")
+    if rov["liability_limited"] not in ("no", "yes"):
+        errors["liability_limited"] = "Выберите: ответственность ограничена или нет."
+        rov["liability_limited"] = "no"
+    rov["liability"] = text("liability", "Чем ограничена ответственность", 10, 3000) \
+        if rov["liability_limited"] == "yes" else ""
+
+    # Раздел 12 — круг лиц
     rov["investors"] = f.get("investors", "")
     if rov["investors"] not in ROV_INVESTORS:
-        errors["investors"] = "Выберите круг инвесторов."
+        errors["investors"] = "Выберите, кто может купить ЦФА."
+
+    # Разделы 13–14 — выкуп и иные условия
     rov["buyback"] = f.get("buyback", "no")
     if rov["buyback"] not in ("yes", "no"):
         errors["buyback"] = "Выберите вариант."
     rov["buyback_terms"] = text("buyback_terms", "Условия выкупа", 10, 2000, required=rov["buyback"] == "yes")
-    rov["collateral"] = f.get("collateral", "no")
-    if rov["collateral"] not in ("yes", "no"):
-        errors["collateral"] = "Выберите вариант."
-    rov["collateral_desc"] = text("collateral_desc", "Описание обеспечения", 10, 2000, required=rov["collateral"] == "yes")
     rov["early_redemption"] = f.get("early_redemption", "no")
     if rov["early_redemption"] not in ("yes", "no"):
         errors["early_redemption"] = "Выберите вариант."
     rov["disputes"] = text("disputes", "Порядок разрешения споров", 20, 3000, default=ROV_DEFAULTS["disputes"])
 
-    # Раздел 13 — риски
+    # Раздел 15 — риски и подпись
     risks = f.get("risks") or []
     if isinstance(risks, str):
         risks = [risks]
@@ -509,7 +662,17 @@ def validate_rov(f: dict) -> tuple[dict, dict]:
     rov["signer_position"] = text("signer_position", "Должность подписанта", 3, 150)
     if str(f.get("confirm", "")).lower() not in ("true", "on", "1", "yes"):
         errors["confirm"] = "Подтвердите достоверность сведений."
+    # Лицо, предоставившее обеспечение, тоже подписывает Решение
+    if has_collateral:
+        rov["guarantor_signer"] = text("guarantor_signer", "Подписант со стороны обеспечения", 5, 300)
+        if str(f.get("guarantor_confirm", "")).lower() not in ("true", "on", "1", "yes"):
+            errors["guarantor_confirm"] = "Нужна подпись лица, предоставившего обеспечение."
+    else:
+        rov["guarantor_signer"] = ""
 
+    # Долговые ЦФА: обязательные положения и график — собираются автоматически, эмитент их не меняет
+    rov["debt_clauses"] = list(DEBT_CLAUSES)
+    rov["smart_contract"] = ROV_SMART_CONTRACT
     return rov, errors
 
 

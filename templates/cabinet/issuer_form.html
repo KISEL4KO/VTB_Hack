@@ -1,32 +1,50 @@
 {% extends "cabinet/_layout.html" %}
-{% macro field(name, label, type='text', hint='', full=False, attrs='') %}
+{# req — подпись для проверки «Не хватает: …» внизу формы (номер раздела и название поля) #}
+{% macro field(name, label, type='text', hint='', full=False, attrs='', req='') %}
   <div class="light-field {{ 'light-field--full' if full }}">
     <label for="rov-{{ name }}">{{ label }}</label>
-    <input id="rov-{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ rov.get(name, '') }}" {{ attrs|safe }}>
+    <input id="rov-{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ rov.get(name, '') }}" {{ attrs|safe }}
+           {% if req %}data-req="{{ req }}"{% endif %}>
     {% if hint %}<small class="field-hint">{{ hint }}</small>{% endif %}
   </div>
 {% endmacro %}
-{% macro area(name, label, rows=3) %}
+{% macro area(name, label, rows=3, req='', hint='') %}
   <div class="light-field light-field--full">
     <label for="rov-{{ name }}">{{ label }}</label>
-    <textarea id="rov-{{ name }}" name="{{ name }}" rows="{{ rows }}">{{ rov.get(name, '') }}</textarea>
+    <textarea id="rov-{{ name }}" name="{{ name }}" rows="{{ rows }}" {% if req %}data-req="{{ req }}"{% endif %}>{{ rov.get(name, '') }}</textarea>
+    {% if hint %}<small class="field-hint">{{ hint }}</small>{% endif %}
   </div>
 {% endmacro %}
-{% macro select(name, label, options, full=False) %}
+{% macro select(name, label, options, full=False, req='', placeholder='') %}
   <div class="light-field {{ 'light-field--full' if full }}">
     <label for="rov-{{ name }}">{{ label }}</label>
-    <select id="rov-{{ name }}" name="{{ name }}">
+    <select id="rov-{{ name }}" name="{{ name }}" {% if req %}data-req="{{ req }}"{% endif %}>
+      {% if placeholder %}<option value="" {{ 'selected' if not rov.get(name) }}>{{ placeholder }}</option>{% endif %}
       {% for value, text in options.items() %}
       <option value="{{ value }}" {{ 'selected' if rov.get(name) == value }}>{{ text }}</option>
       {% endfor %}
     </select>
   </div>
 {% endmacro %}
+{# Переключатель из нескольких вариантов (radio), например «Не ограничена / Ограничена» #}
+{% macro segmented(name, label, options, current, req='') %}
+  <div class="light-field light-field--full">
+    <span class="light-label" id="lbl-{{ name }}">{{ label }}</span>
+    <div class="seg" role="radiogroup" aria-labelledby="lbl-{{ name }}" data-group="{{ name }}" {% if req %}data-req="{{ req }}"{% endif %}>
+      {% for value, text in options.items() %}
+      <label class="seg__opt"><input type="radio" name="{{ name }}" value="{{ value }}" {{ 'checked' if current == value }}><span>{{ text }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+{% endmacro %}
 {% block pane %}
+{% set collateral_now = rov.get('collateral_type') or ('pledge' if rov.get('collateral') == 'yes' else ('none' if issue else '')) %}
+{% set liability_now = rov.get('liability_limited') or ('yes' if issue and rov.get('liability') else '') %}
 <div class="pane-header-row">
   <div>
     <h2 class="pane-title">{{ 'Исправление' if issue else 'Новое' }} решение о выпуске ЦФА</h2>
-    <p class="pane-desc">Документ по образцу «Решения о выпуске» оператора ИС: 13 разделов. После отправки его проверит администратор.</p>
+    <p class="pane-desc">Решение о выпуске долговых ЦФА: 15 разделов. Обязательные по закону положения конструктор вставляет сам.
+      После отправки документ проверит администратор.</p>
   </div>
   <a class="btn-secondary btn-link" href="{{ url_for('cabinet_tab', tab='issuer') }}">← К выпускам</a>
 </div>
@@ -37,7 +55,7 @@
 
 <div class="rov-layout">
 <form id="form-rov" class="rov-form" data-issue-id="{{ issue.id if issue else '' }}" novalidate>
-  <section class="rov-section">
+  <section class="rov-section" id="sec-1">
     <h3><span>1</span> Сведения об эмитенте</h3>
     {% set is_ip = me.role == 'IP' %}
     <div class="rov-prefill">
@@ -53,11 +71,19 @@
     {% endif %}
     <div class="light-form-grid">
       {{ field('issuer_full_name', 'ФИО эмитента полностью' if is_ip else 'Полное наименование', full=True,
-               attrs='placeholder="Индивидуальный предприниматель Иванов Иван Иванович"' if is_ip else 'placeholder="Общество с ограниченной ответственностью «…»"') }}
-      {{ field('ogrn_date', 'Дата регистрации ИП (присвоения ОГРНИП)' if is_ip else 'Дата присвоения ОГРН', 'date') }}
-      {{ field('website', 'Официальный сайт (необязательно)', attrs='placeholder="example.ru"') }}
-      {{ field('beneficiary', 'Бенефициарный владелец', full=True, attrs='placeholder="ФИО и доля владения"',
-               hint='У ИП бенефициар — сам предприниматель' if is_ip else '') }}
+               attrs='placeholder="Индивидуальный предприниматель Иванов Иван Иванович"' if is_ip else 'placeholder="Общество с ограниченной ответственностью «…»"',
+               req='1. Полное наименование') }}
+      {{ field('ogrn_date', 'Дата регистрации ИП (присвоения ОГРНИП)' if is_ip else 'Дата присвоения ОГРН', 'date',
+               req='1. Дата ОГРНИП' if is_ip else '1. Дата присвоения ОГРН') }}
+      {{ field('beneficiary', 'Бенефициарный владелец', attrs='placeholder="ФИО и доля владения"',
+               hint='У ИП бенефициар — сам предприниматель' if is_ip else '', req='1. Бенефициарный владелец') }}
+      <div class="light-field light-field--full">
+        <label for="rov-website">Сайт эмитента</label>
+        <input id="rov-website" type="url" name="website" value="{{ rov.get('website', '') }}" placeholder="https://..."
+               inputmode="url" data-req="1. Сайт эмитента" {{ 'disabled' if rov.get('no_website') }}>
+        <label class="check check--inline"><input type="checkbox" name="no_website" value="true" {{ 'checked' if rov.get('no_website') }}> Сайта нет</label>
+        <small class="field-hint">Решение о выпуске публикуется на сайте эмитента. В документе — строка «Сайт: …».</small>
+      </div>
     </div>
   </section>
 
@@ -66,24 +92,39 @@
     <p class="rov-note">Заполняется автоматически: информационная система «Платформа ЦФА», распределённый реестр — смарт-контракт CFAPlatform в EVM-сети оператора.</p>
   </section>
 
-  <section class="rov-section">
+  <section class="rov-section" id="sec-3">
     <h3><span>3</span> Вид и объём прав</h3>
     <p class="rov-note">ЦФА удостоверяют денежные требования к эмитенту: право на номинальную стоимость и фиксированный доход.</p>
     <div class="light-form-grid">
-      {{ field('title', 'Наименование выпуска', full=True, attrs='placeholder="ЦФА Компания 01" maxlength="80"') }}
-      {{ field('coupon_rate', 'Фиксированный доход, % годовых', attrs='inputmode="decimal" placeholder="18.5"') }}
-      {{ select('coupon_period', 'Выплата дохода', coupon_periods) }}
-      {{ field('maturity_date', 'Дата погашения', 'date') }}
-      {{ area('redemption_order', 'Порядок погашения', 3) }}
+      {{ field('title', 'Наименование выпуска', full=True, attrs='placeholder="ЦФА Компания 01" maxlength="80"', req='3. Наименование выпуска') }}
+      {{ field('coupon_rate', 'Ставка, % годовых', attrs='inputmode="decimal" placeholder="18.5"', req='3. Ставка, % годовых') }}
+      {{ select('coupon_period', 'Частота выплат', coupon_periods, req='3. Частота выплат') }}
+      {{ field('maturity_date', 'Дата погашения', 'date', hint='Обязательна: долг без срока погашения можно продавать только квалифицированным инвесторам (Указание ЦБ 7176-У)',
+               req='3. Дата погашения') }}
+      {{ area('redemption_order', 'Порядок погашения', 3, req='3. Порядок погашения') }}
+    </div>
+    <div class="debt-box" aria-live="polite">
+      <div class="debt-box__head"><b>График выплат и формула</b><span class="live-dot">собираются из полей выше</span></div>
+      <p class="debt-formula" id="rov-formula">Заполните ставку, цену (раздел 5), частоту выплат и дату погашения.</p>
+      <div id="rov-schedule"></div>
+      <small class="field-hint">Купонные периоды отсчитываются от даты размещения (DvP). В таблице — план, если сбор закроется
+        в последний день приёма заявок; владельцу начисляется количество ЦФА × купон, вниз до рубля.</small>
+    </div>
+    <div class="debt-box debt-box--locked">
+      <div class="debt-box__head"><b>Обязательные положения долговых ЦФА</b><span class="lock-tag">🔒 вставляются в документ автоматически</span></div>
+      <ol class="debt-list">
+        {% for c in debt_clauses %}<li>{{ c }}</li>{% endfor %}
+      </ol>
+      <small class="field-hint">{{ debt_law_ref }}. Эмитент эти фразы не пишет и не может удалить.</small>
     </div>
   </section>
 
   <section class="rov-section">
     <h3><span>4</span> Количество ЦФА</h3>
     <div class="light-form-grid">
-      {{ field('min_qty', 'Минимальное количество выпуска, шт.', hint='Порог: если заявок меньше — выпуск не состоится', attrs='inputmode="numeric"') }}
-      {{ field('max_qty', 'Максимальное количество выпуска, шт.', attrs='inputmode="numeric"') }}
-      {{ field('min_order_qty', 'Минимум в одной заявке, шт.', attrs='inputmode="numeric"') }}
+      {{ field('min_qty', 'Минимальное количество выпуска, шт.', hint='Порог: если заявок меньше — выпуск не состоится', attrs='inputmode="numeric"', req='4. Минимальное количество') }}
+      {{ field('max_qty', 'Максимальное количество выпуска, шт.', attrs='inputmode="numeric"', req='4. Максимальное количество') }}
+      {{ field('min_order_qty', 'Минимум в одной заявке, шт.', attrs='inputmode="numeric"', req='4. Минимум в одной заявке') }}
       {{ field('max_order_qty', 'Максимум в одной заявке, шт.', hint='Пусто — без ограничения', attrs='inputmode="numeric"') }}
     </div>
   </section>
@@ -91,7 +132,7 @@
   <section class="rov-section">
     <h3><span>5</span> Цена приобретения</h3>
     <div class="light-form-grid">
-      {{ field('price_per_cfa', 'Цена 1 ЦФА = номинальная стоимость, ₽', attrs='inputmode="numeric"') }}
+      {{ field('price_per_cfa', 'Цена 1 ЦФА = номинальная стоимость, ₽', attrs='inputmode="numeric"', req='5. Цена 1 ЦФА') }}
       <div class="light-field"><label>Объём выпуска</label><div class="static-value" id="rov-volume">—</div></div>
     </div>
   </section>
@@ -99,8 +140,8 @@
   <section class="rov-section">
     <h3><span>6</span> Период размещения</h3>
     <div class="light-form-grid">
-      {{ field('placement_start', 'Начало приёма заявок', 'date', attrs='min="' ~ today_iso ~ '"') }}
-      {{ field('placement_end', 'Окончание приёма заявок', 'date', attrs='min="' ~ today_iso ~ '"') }}
+      {{ field('placement_start', 'Начало приёма заявок', 'date', attrs='min="' ~ today_iso ~ '"', req='6. Начало приёма заявок') }}
+      {{ field('placement_end', 'Окончание приёма заявок', 'date', attrs='min="' ~ today_iso ~ '"', req='6. Окончание приёма заявок') }}
     </div>
   </section>
 
@@ -110,70 +151,120 @@
   </section>
 
   <section class="rov-section">
-    <h3><span>8</span> Способ оплаты</h3>
-    <div class="light-form-grid">{{ select('payment_method', 'Оплата', payments, full=True) }}</div>
+    <h3><span>8</span> Смарт-контракт</h3>
+    <div class="debt-box debt-box--locked">
+      <p class="rov-note"><b>{{ smart_contract_text }}</b></p>
+      <small class="field-hint">Эмитент ничего не заполняет: текст стоит сам и не редактируется. В документе — отдельным пунктом.</small>
+    </div>
   </section>
 
   <section class="rov-section">
-    <h3><span>9</span> Ограничение ответственности эмитента</h3>
-    <div class="light-form-grid">{{ area('liability', 'Текст раздела', 3) }}</div>
+    <h3><span>9</span> Способ оплаты</h3>
+    <div class="light-form-grid">{{ select('payment_method', 'Оплата', payments, full=True, req='9. Способ оплаты') }}</div>
+  </section>
+
+  <section class="rov-section" id="sec-10">
+    <h3><span>10</span> Обеспечение</h3>
+    <div class="light-form-grid">
+      {{ select('collateral_type', 'Есть ли обеспечение', collateral_types, full=True, req='10. Обеспечение', placeholder='— выберите —') }}
+    </div>
+    <div class="reveal" data-show-if="collateral_type" data-show-not="none,">
+      <div class="light-form-grid">
+        {{ field('collateral_provider', 'Кто обеспечивает (название, ИНН)', full=True, attrs='placeholder="ООО «Поручитель», ИНН 7700000000"', req='10. Кто обеспечивает') }}
+        {{ area('collateral_subject', 'Что именно', 2, req='10. Что именно', hint='Например: поручительство на всю сумму номинала и дохода') }}
+        {{ area('collateral_terms', 'Условия', 2, req='10. Условия обеспечения') }}
+      </div>
+    </div>
+    <small class="field-hint">Если есть поручитель или залог, это обязательно пишут в решении. В документе — «Обеспечение не предусмотрено» или его описание.</small>
+  </section>
+
+  <section class="rov-section" id="sec-11">
+    <h3><span>11</span> Ответственность эмитента</h3>
+    <div class="light-form-grid">
+      {{ segmented('liability_limited', 'Ответственность эмитента', {'no': 'Не ограничена', 'yes': 'Ограничена'}, liability_now, req='11. Ответственность') }}
+    </div>
+    <div class="reveal" data-show-if="liability_limited" data-show-in="yes">
+      <div class="light-form-grid">
+        {{ area('liability', 'Чем ограничена', 3, req='11. Чем ограничена ответственность',
+                hint='Например: суммой номинальной стоимости ЦФА и начисленного фиксированного дохода') }}
+      </div>
+    </div>
+    <small class="field-hint">Ограничивать ответственность можно, но только если это написано прямо.</small>
+  </section>
+
+  <section class="rov-section" id="sec-12">
+    <h3><span>12</span> Круг лиц</h3>
+    <div class="light-form-grid">
+      {{ segmented('investors', 'Кто может купить', investors_short, rov.get('investors', 'all'), req='12. Круг лиц') }}
+    </div>
+    <p class="rov-note seg-hint" data-for="investors" data-value="all">Обычные граждане могут купить не больше чем на 600 тыс. ₽ в год.</p>
+    <p class="rov-note seg-hint" data-for="investors" data-value="business">Физлицам без статуса ИП кнопка «Купить» неактивна; на витрине — значок «Для ИП и компаний».</p>
+    <p class="rov-note seg-hint" data-for="investors" data-value="qualified">На витрине — значок «Для квал. инвесторов», кнопка «Купить» для неквалифицированных физлиц и ИП неактивна.
+      Если такой ЦФА купит обычный гражданин, оператор обязан выкупить его за свой счёт (259-ФЗ, ст. 6 ч. 7).</p>
   </section>
 
   <section class="rov-section">
-    <h3><span>10</span> Круг лиц</h3>
-    <div class="light-form-grid">{{ select('investors', 'Кому предлагаются ЦФА', investors_all, full=True) }}</div>
-  </section>
-
-  <section class="rov-section">
-    <h3><span>11</span> Выкуп ЦФА эмитентом</h3>
+    <h3><span>13</span> Выкуп ЦФА эмитентом</h3>
     <p class="rov-note">Ваше обязательство купить ЦФА у владельцев до погашения на описанных условиях. Платформа его не исполняет
       сама: условия фиксируются в документе, а инвесторы видят их в аналитике (выкуп добавляет баллы к оценке).</p>
     <div class="light-form-grid">
       {{ select('buyback', 'Выкуп до погашения', {'no': 'Не предусмотрен', 'yes': 'Предусмотрен'}) }}
-      {{ area('buyback_terms', 'Условия выкупа (если предусмотрен)', 2) }}
+    </div>
+    <div class="reveal" data-show-if="buyback" data-show-in="yes">
+      <div class="light-form-grid">{{ area('buyback_terms', 'Условия выкупа', 2, req='13. Условия выкупа') }}</div>
     </div>
   </section>
 
   <section class="rov-section">
-    <h3><span>12</span> Иные условия</h3>
-    <p class="rov-note">Обеспечение, досрочное погашение и порядок споров — юридические обязательства эмитента. Залог оформляется
-      отдельным договором; документ с этими условиями подписывается УКЭП, а его SHA-256 записывается в смарт-контракт.</p>
+    <h3><span>14</span> Иные условия</h3>
+    <p class="rov-note">Досрочное погашение и порядок споров — юридические обязательства эмитента. Документ подписывается УКЭП,
+      а его SHA-256 записывается в смарт-контракт.</p>
     <div class="light-form-grid">
-      {{ select('collateral', 'Обеспечение', {'no': 'Не предусмотрено', 'yes': 'Предусмотрено'}) }}
       {{ select('early_redemption', 'Досрочное погашение', {'no': 'Не допускается', 'yes': 'Допускается'}) }}
-      {{ area('collateral_desc', 'Описание обеспечения (если предусмотрено)', 2) }}
-      {{ area('disputes', 'Порядок разрешения споров', 2) }}
+      {{ area('disputes', 'Порядок разрешения споров', 2, req='14. Порядок разрешения споров') }}
     </div>
   </section>
 
-  <section class="rov-section">
-    <h3><span>13</span> Риски</h3>
+  <section class="rov-section" id="sec-15">
+    <h3><span>15</span> Риски и подпись</h3>
     <div class="light-field light-field--full">
       <label>Риски, которые несёт инвестор (не меньше трёх)</label>
-      <div class="check-grid" data-group="risks">
+      <div class="check-grid" data-group="risks" data-req="15. Риски — не меньше трёх" data-req-min="3">
         {% for key, text in risks_all.items() %}
         <label class="check"><input type="checkbox" name="risks" value="{{ key }}" {{ 'checked' if key in rov.get('risks', []) }}> {{ text }}</label>
         {% endfor %}
       </div>
     </div>
     <div class="light-form-grid">{{ area('risks_extra', 'Дополнительные риски (необязательно)', 2) }}</div>
-  </section>
 
-  <section class="rov-section">
-    <h3><span>✍</span> Подпись</h3>
+    <h4 class="rov-subhead">Подпись эмитента</h4>
     <div class="light-form-grid">
-      {{ field('signer_name', 'ФИО подписанта', attrs='placeholder="Иванов Иван Иванович"') }}
-      {{ field('signer_position', 'Должность') }}
+      {{ field('signer_name', 'ФИО подписанта', attrs='placeholder="Иванов Иван Иванович"', req='15. ФИО подписанта') }}
+      {{ field('signer_position', 'Должность', req='15. Должность подписанта') }}
       <div class="light-field light-field--full">
-        <label class="check"><input type="checkbox" name="confirm" value="true"> Подтверждаю достоверность сведений и подписываю Решение о выпуске УКЭП</label>
+        <label class="check"><input type="checkbox" name="confirm" value="true" data-req="15. Подтверждение достоверности"> Подтверждаю достоверность сведений и подписываю Решение о выпуске УКЭП</label>
+      </div>
+    </div>
+
+    <div class="reveal" data-show-if="collateral_type" data-show-not="none,">
+      <h4 class="rov-subhead">Подпись лица, предоставившего обеспечение</h4>
+      <div class="light-form-grid">
+        {{ field('guarantor_signer', 'Кто подписывает', full=True, attrs='placeholder="ООО «Поручитель», генеральный директор Петров П. П."', req='15. Подписант обеспечения') }}
+        <div class="light-field light-field--full">
+          <label class="check"><input type="checkbox" name="guarantor_confirm" value="true" data-req="15. Подпись обеспечения"> Лицо, предоставившее обеспечение, подписывает Решение УКЭП</label>
+        </div>
       </div>
     </div>
   </section>
 
   <div id="rov-error" class="form-error hidden"></div>
+  <div class="rov-check" id="rov-check" aria-live="polite">
+    <b class="rov-check__title">Проверка перед отправкой</b>
+    <p class="rov-check__missing" id="rov-missing"></p>
+  </div>
   <div class="rov-actions">
     <a class="btn-secondary btn-link" href="{{ url_for('cabinet_tab', tab='issuer') }}">Отмена</a>
-    <button type="submit" class="btn-primary">Подписать и отправить на проверку</button>
+    <button type="submit" class="btn-primary" id="rov-submit">Подписать и отправить на модерацию</button>
   </div>
 </form>
 <aside class="rov-dash" aria-label="Живой дашборд выпуска">

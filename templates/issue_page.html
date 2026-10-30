@@ -8,14 +8,20 @@
     <div>
       <div class="issue-hero__badges">
         <span class="badge badge--{{ issue_status[issue.status][1] }}">{{ issue_status[issue.status][0] }}</span>
-        <span class="badge badge--blue">{{ 'Для квалифицированных' if issue.only_qual else 'Для всех инвесторов' }}</span>
+        <span class="badge badge--blue">{{ audience_badge[issue_audience(issue)] }}</span>
         <span class="badge badge--blue">CFA-{{ '%06d' % issue.id }}</span>
       </div>
       <h1 class="issue-hero__title">{{ issue.title }}</h1>
       <p class="issue-hero__sub">Эмитент: {{ issue.issuer_name }} · номинал {{ issue.price_per_cfa|rub }} · купон {{ ('%.2f' % issue.coupon_rate)|replace('.', ',') }} % годовых ·
         погашение {{ issue.maturity_date|ddmm }}</p>
+      {% if issue.published_at %}<p class="published-line"><span class="badge badge--published">Опубликовано</span>
+        Решение о выпуске опубликовано {{ issue.published_at[:10]|ddmm }} · <a href="{{ url_for('doc_decision', issue_id=issue.id) }}" target="_blank">открыть PDF</a></p>{% endif %}
+      {% set block = buy_block_reason(me, issue) %}
+      {% if block and issue.status == 'SUBSCRIPTION' %}<p class="buy-note">🔒 {{ block }} — так указано в Решении о выпуске (раздел 12)</p>{% endif %}
       <div class="issue-hero__actions">
-        {% if issue.status == 'SUBSCRIPTION' and issue.placement_start <= today_iso <= issue.placement_end %}
+        {% if issue.status == 'SUBSCRIPTION' and issue.placement_start <= today_iso <= issue.placement_end and block %}
+        <button type="button" class="btn-primary" disabled data-reason title="{{ block }} — круг лиц в Решении о выпуске, раздел 12">Купить ЦФА</button>
+        {% elif issue.status == 'SUBSCRIPTION' and issue.placement_start <= today_iso <= issue.placement_end %}
         <button type="button" class="btn-primary" data-buy="{{ issue.id }}" data-title="{{ issue.title }}" data-price="{{ issue.price_per_cfa }}"
                 data-left="{{ issue.max_qty - issue.collected_qty }}" data-min="{{ issue.min_order_qty }}"
                 data-max="{{ issue.max_order_qty or '' }}">Купить ЦФА</button>
@@ -63,7 +69,9 @@
       <div class="dash-card">
         <h3>Спрос и условия</h3>
         <div class="kpi-grid kpi-grid--2" data-k="demand"></div>
-        <div class="kv-row"><span>Обеспечение</span><b>{{ 'предусмотрено' if rov.collateral == 'yes' else 'не предусмотрено' }}</b></div>
+        <div class="kv-row"><span>Обеспечение</span><b>{{ sm.collateral_name|lower if sm.collateral_type != 'none' else 'не предусмотрено' }}</b></div>
+        <div class="kv-row"><span>Ответственность эмитента</span><b>{{ 'ограничена' if sm.liability_limited == 'yes' else 'не ограничена' }}</b></div>
+        <div class="kv-row"><span>Кто может купить</span><b>{{ sm.investors }}</b></div>
         <div class="kv-row"><span>Выкуп эмитентом</span><b>{{ 'предусмотрен' if rov.buyback == 'yes' else 'не предусмотрен' }}</b></div>
         <div class="kv-row"><span>Досрочное погашение</span><b>{{ 'допускается' if rov.early_redemption == 'yes' else 'не допускается' }}</b></div>
         <div class="kv-row"><span>В одной заявке</span><b>от {{ issue.min_order_qty|num }}{% if issue.max_order_qty %} до {{ issue.max_order_qty|num }}{% endif %} шт.</b></div>

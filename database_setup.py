@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from blockchain import doc_hash, to_bytes32
-from validators import ISSUER_ROLES, PERSON_ROLES, SIGN_PEP_ROLES
+from validators import ISSUER_ROLES, PERSON_ROLES, SIGN_PEP_ROLES, coupon_periods
 
 DB_PATH = Path(__file__).parent / "cfa.db"
 
@@ -631,6 +631,10 @@ def buy_cfa_on_showcase(
 
         # РАЗЛИЧИЕ 1: физические лица (ФЛ и ИП) — квалификация и лимит 600 000 ₽;
         #              ФЛ подписывает кодом из СМС, ИП — своей УКЭП
+        # Круг лиц из Решения о выпуске (раздел 12): «только ИП и компании» — физлицам без статуса ИП покупка закрыта
+        audience = json.loads(issue["rov_json"] or "{}").get("investors", "all")
+        if audience == "business" and user["role"] not in ISSUER_ROLES:
+            raise ValueError("Этот выпуск доступен только индивидуальным предпринимателям и компаниям.")
         if user["role"] in PERSON_ROLES:
             if issue["only_qual"] == 1 and user["is_qualified"] == 0:
                 raise ValueError("Этот выпуск доступен только квалифицированным инвесторам!")
@@ -760,42 +764,15 @@ def finalize_issue_dvp(conn: sqlite3.Connection, issue_id: int, chain=None) -> D
 # Те же правила, что в смарт-контракте (payCoupon / redeem) и в аналитике (static/analytics.js):
 #   купон владельца = qty × номинал × ставка × дни периода / 365, целые рубли с округлением вниз;
 #   график — от даты закрытия сбора (DvP) шагом 1 или 3 месяца, хвост короче 15 дней сливается с последним периодом.
-COUPON_STEP_MONTHS = {"monthly": 1, "quarterly": 3, "maturity": 0}
-
-
-def _add_months(d: date, n: int) -> date:
-    """31 января + 1 месяц → 28/29 февраля (как в analytics.js)."""
-    y, m = divmod(d.month - 1 + n, 12)
-    y, m = d.year + y, m + 1
-    last = (date(y + (m == 12), m % 12 + 1, 1) - date(y, m, 1)).days
-    return date(y, m, min(d.day, last))
-
-
 def coupon_schedule(issue) -> list[dict]:
-    """Купонные периоды размещённого выпуска: [{no, start, end, days}]. Начало — дата DvP."""
+    """Купонные периоды размещённого выпуска: [{no, start, end, days}]. Начало — дата DvP.
+    Правила шага и «хвоста» — в validators.coupon_periods (их же использует график в Решении о выпуске)."""
     if not issue["finalized_at"]:
         return []
     start = date.fromisoformat(issue["finalized_at"][:10])
     maturity = date.fromisoformat(issue["maturity_date"])
-    if maturity <= start:
-        return []
     period = json.loads(issue["rov_json"]).get("coupon_period", "maturity")
-    step = COUPON_STEP_MONTHS.get(period, 0)
-    ends = []
-    if step:
-        k = 1
-        while True:
-            d = _add_months(start, step * k)
-            if (maturity - d).days < 15:
-                break
-            ends.append(d)
-            k += 1
-    ends.append(maturity)
-    out, prev = [], start
-    for no, end in enumerate(ends, 1):
-        out.append({"no": no, "start": prev.isoformat(), "end": end.isoformat(), "days": (end - prev).days})
-        prev = end
-    return out
+    return coupon_periods(start, maturity, period)
 
 
 def rate_bp(issue) -> int:

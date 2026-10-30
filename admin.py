@@ -207,6 +207,14 @@ def _issue_checks(issue, issuer, rov) -> list[dict]:
              "Указан", "Кредитный риск не отмечен"),
         item("Подписант указан", bool(rov.get("signer_name")), f"{rov.get('signer_position')} {rov.get('signer_name')}",
              "Нет подписанта", "fail"),
+        item("Сайт эмитента для публикации Решения", bool(rov.get("website")), rov.get("website", ""),
+             "Эмитент отметил «Сайта нет» — Решение будет опубликовано только на Платформе"),
+        item("Обязательные положения долговых ЦФА", bool(rov.get("debt_clauses")),
+             f"Вставлены автоматически ({validators.DEBT_LAW_REF})",
+             "Документ подан до обновления формы — положений 259-ФЗ ст. 3 ч. 1.2 в нём нет, верните на доработку"),
+        item("Обеспечение подписано лицом, которое его даёт",
+             (rov.get("collateral_type") or "none") == "none" or bool(rov.get("guarantor_signer")),
+             rov.get("guarantor_signer") or "Обеспечение не предусмотрено", "Нет подписи поручителя / залогодателя", "fail"),
     ]
 
 
@@ -228,6 +236,7 @@ def issue_detail(issue_id):
     return render_template("admin/issue.html", section="issues", issue=issue, issuer=issuer, rov=rov,
                            payload=issue_payload(conn, issue), bench=get_benchmarks(conn),
                            checks=_issue_checks(issue, issuer, rov), orders=orders, history=history,
+                           sm=validators.rov_summary(rov),
                            action_names=ADMIN_ACTIONS, risk_names=[validators.ROV_RISKS.get(r, r) for r in rov.get('risks', [])],
                            investors_all=validators.ROV_INVESTORS, payments=validators.ROV_PAYMENT,
                            coupon_periods=validators.ROV_COUPON_PERIODS)

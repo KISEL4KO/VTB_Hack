@@ -259,7 +259,7 @@
       return {
         price: num('price_per_cfa'), rate: num('coupon_rate'), period: val('coupon_period'),
         placementStart: val('placement_start'), placementEnd: val('placement_end'), maturity: val('maturity_date'),
-        collateral: val('collateral') === 'yes', buyback: val('buyback') === 'yes',
+        collateral: val('collateral_type') !== '' && val('collateral_type') !== 'none', buyback: val('buyback') === 'yes',
         minQty: num('min_qty'), maxQty: num('max_qty'), minOrder: num('min_order_qty') || 1, maxOrder: num('max_order_qty') || null,
         collected: null, showDemand: false, issuerIssued: ctx.issued, issuerCancelled: ctx.cancelled
       };

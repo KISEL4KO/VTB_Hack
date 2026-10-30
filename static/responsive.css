@@ -47,23 +47,9 @@ body.modal-open { overflow: hidden; }
 .cfa-card__actions > * { white-space: nowrap; }
 .cfa-card__actions > :first-child { flex: 1 1 auto; }
 
-/* ---------- HERO витрины: картинка справа без растягивания, текст на тёмном фоне ---------- */
-.hero-banner { display: block; min-height: 360px; background: #0B192C; }
-.hero-banner__picture { position: absolute; inset: 0; display: block; }
-.hero-banner__picture .hero-banner__img { width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: 60% 40%; }
-.hero-banner__overlay { position: relative; inset: auto; min-height: clamp(360px, 42vw, 520px); }
-
-@media (min-width: 1280px) {
-  /* На широком экране картинка не растягивается сверх своих 1024 px: она справа, слева — фирменный градиент */
-  .hero-banner { background: linear-gradient(100deg, #0B192C 0%, #0f2a52 45%, #13306a 100%); }
-  .hero-banner__picture { left: auto; width: min(62%, 1024px); }
-  .hero-banner__picture::after { content: ""; position: absolute; inset: 0;
-    background: linear-gradient(90deg, #0d2248 0%, rgba(13, 34, 72, .55) 22%, rgba(13, 34, 72, 0) 50%); }
-  .hero-banner__overlay { min-height: 460px; background: linear-gradient(180deg, rgba(11,25,44,0) 55%, rgba(11,25,44,.55) 100%); }
-  .hero-banner__content { flex-direction: column; align-items: flex-start; justify-content: flex-end; }
-  .hero-banner__content > div:first-child { max-width: 640px; }
-  .hero-banner__heading { font-size: 40px; line-height: 1.12; }
-}
+/* ---------- HERO витрины: на компьютере и планшете — как в исходном макете (картинка во всю ширину, текст поверх);
+   <picture> только подставляет облегчённый WebP. На телефоне — отдельная раскладка ниже. ---------- */
+.hero-banner__picture { display: block; }
 
 /* ========================= Большие мониторы ========================= */
 @media (min-width: 1680px) {
@@ -142,9 +128,10 @@ body.modal-open { overflow: hidden; }
   .header-count { margin-left: 5px; min-width: 18px; line-height: 18px; font-size: 11px; }
 
   /* Витрина */
-  .hero-banner__picture { position: relative; inset: auto; height: 210px; }
+  .hero-banner__picture { position: relative; height: 210px; }
+  .hero-banner__picture .hero-banner__img { width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: 60% 40%; }
   .hero-banner__picture::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,25,44,0) 55%, #0B192C 100%); }
-  .hero-banner__overlay { min-height: 0; padding: 4px var(--gutter) 24px; background: #0B192C; }
+  .hero-banner__overlay { position: relative; inset: auto; min-height: 0; padding: 4px var(--gutter) 24px; background: #0B192C; }
   .hero-banner__heading { font-size: 25px; line-height: 1.18; }
   .hero-banner__sub { font-size: 14px; }
   .hero-banner__badge { font-size: 11px; }
@@ -201,7 +188,8 @@ body.modal-open { overflow: hidden; }
 
   /* Поля ввода 16 px: iOS не увеличивает страницу при фокусе; кнопки — удобная высота для пальца */
   input, select, textarea, .form-field input, .form-field select, .light-field input, .light-field select, .light-field textarea { font-size: 16px !important; }
-  .form-field input, .form-field select, .light-field input, .light-field select { min-height: 44px; }
+  .form-field input:not([type=checkbox]):not([type=radio]), .form-field select,
+  .light-field input:not([type=checkbox]):not([type=radio]), .light-field select { min-height: 44px; }
   .btn-primary, .btn-secondary, .btn-danger, .btn-outline-light { min-height: 42px; }
 
 
@@ -216,7 +204,8 @@ body.modal-open { overflow: hidden; }
   /* Модальные окна — снизу экрана, как на телефоне привычно */
   .modal-backdrop { align-items: flex-end; padding: 0; }
   .modal-card { max-width: none; border-radius: 22px 22px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
-    max-height: 92dvh; overflow-y: auto; animation: sheet-up .22s ease-out; }
+    max-height: 92dvh; overflow-y: auto; }
+  .modal-backdrop:not(.hidden) .modal-card { animation: sheet-up .22s ease-out; }
   .modal-card .light-field[style*="justify-content: flex-end"] { flex-direction: column-reverse; }
   .modal-card .light-field[style*="justify-content: flex-end"] > * { width: 100%; min-height: 46px; }
   .toast { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; }
